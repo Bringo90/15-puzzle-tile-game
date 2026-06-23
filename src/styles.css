@@ -189,6 +189,221 @@ h1 {
   text-align: center;
 }
 
+.leaderboard {
+  margin-top: 1.35rem;
+  padding-top: 1rem;
+  border-top: 2px solid rgba(46, 36, 29, 0.12);
+}
+
+.modal-panel .leaderboard,
+.completion-sheet .leaderboard {
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.leaderboard__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.leaderboard h2 {
+  color: var(--ink);
+  font-family: Georgia, ui-serif, serif;
+  font-size: 1.55rem;
+  line-height: 1;
+  margin: 0;
+}
+
+.leaderboard__header button,
+.score-form button {
+  min-height: 2.4rem;
+  border: 2px solid rgba(46, 36, 29, 0.16);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 0 0.75rem;
+}
+
+.leaderboard__header button:disabled,
+.score-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.score-form {
+  margin-top: 0.85rem;
+}
+
+.score-form label {
+  color: var(--muted);
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 800;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+}
+
+.score-form__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.55rem;
+}
+
+.score-form input {
+  min-width: 0;
+  min-height: 2.7rem;
+  border: 2px solid rgba(46, 36, 29, 0.16);
+  border-radius: 6px;
+  background: rgba(255, 250, 240, 0.78);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  padding: 0 0.75rem;
+}
+
+.leaderboard__message,
+.leaderboard__empty {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin: 0.7rem 0 0;
+  text-align: center;
+}
+
+.score-list {
+  display: grid;
+  gap: 0.45rem;
+  list-style: none;
+  margin: 0.85rem 0 0;
+  padding: 0;
+}
+
+.score-row {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.65rem;
+  border-radius: 6px;
+  background: rgba(255, 250, 240, 0.62);
+  color: var(--ink);
+  font-weight: 800;
+  padding: 0.35rem 0.55rem;
+}
+
+.score-row__rank {
+  color: var(--tile-hot);
+}
+
+.score-row__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score-row__time,
+.score-row__moves {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.modal-backdrop,
+.completion-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.modal-backdrop {
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(46, 36, 29, 0.28);
+}
+
+.modal-panel,
+.completion-sheet {
+  position: relative;
+  width: min(100%, 31rem);
+  border: 2px solid rgba(46, 36, 29, 0.14);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.32), transparent 42%),
+    var(--paper);
+  box-shadow: 0 24px 65px rgba(63, 43, 27, 0.24);
+}
+
+.modal-panel {
+  max-height: min(85vh, 44rem);
+  overflow: auto;
+  border-radius: 8px;
+  padding: 3.35rem 1rem 1rem;
+}
+
+.completion-backdrop {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: linear-gradient(to top, rgba(46, 36, 29, 0.24), rgba(46, 36, 29, 0));
+  pointer-events: none;
+}
+
+.completion-sheet {
+  height: 75dvh;
+  max-height: 44rem;
+  overflow: auto;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  padding: 3.35rem 1rem 1rem;
+  pointer-events: auto;
+  animation: sheet-enter 260ms ease-out;
+}
+
+.modal-close {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  min-height: 2.35rem;
+  border: 2px solid rgba(46, 36, 29, 0.16);
+  border-radius: 6px;
+  background: rgba(255, 250, 240, 0.84);
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 0 0.7rem;
+}
+
+.completion-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+}
+
+.completion-summary span {
+  min-height: 2.8rem;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(242, 111, 76, 0.12);
+  color: var(--ink);
+  font-weight: 900;
+}
+
+@keyframes sheet-enter {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
 @media (min-width: 680px) {
   .game {
     width: min(100%, 34rem);

@@ -10,6 +10,13 @@ const ROW_SLIDE_BOARD: Board = [
   13, 14, 15, 12,
 ];
 
+const ONE_MOVE_FROM_SOLVED_BOARD: Board = [
+  1, 2, 3, 4,
+  5, 6, 7, 8,
+  9, 10, 11, 12,
+  13, 14, null, 15,
+];
+
 function renderWithBoard(board: Board = ROW_SLIDE_BOARD) {
   return render(
     <App
@@ -74,6 +81,8 @@ function startDragTilePath(label: string, clientXs: number[]) {
 
 describe('App drag interaction', () => {
   beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+
     vi.spyOn(window, 'getComputedStyle').mockImplementation(() => ({
       paddingLeft: '8px',
       getPropertyValue: (property: string) => property === '--tile-gap' ? 'clamp(0.45rem, 2vw, 0.7rem)' : '',
@@ -94,6 +103,7 @@ describe('App drag interaction', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('does not commit a drag that ends before the halfway point', () => {
@@ -138,5 +148,23 @@ describe('App drag interaction', () => {
     expect(screen.getByRole('button', { name: 'Tile 6, movable' }).style.transform).not.toContain('+ 88px');
 
     drag.release(20);
+  });
+
+  it('opens the leaderboard in a modal instead of showing it inline', () => {
+    const { container } = renderWithBoard();
+
+    expect(container.querySelector('.game > .leaderboard')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Leaderboard' }));
+
+    expect(screen.getByRole('dialog', { name: 'Leaderboard' })).toBeTruthy();
+  });
+
+  it('opens a completion sheet when the puzzle is solved', () => {
+    renderWithBoard(ONE_MOVE_FROM_SOLVED_BOARD);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tile 15, movable' }));
+
+    expect(screen.getByRole('dialog', { name: 'Puzzle completed' })).toBeTruthy();
   });
 });

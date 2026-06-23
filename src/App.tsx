@@ -10,6 +10,7 @@ import {
   isSolved,
   slideTiles,
 } from './puzzle';
+import { Leaderboard } from './Leaderboard';
 
 const CLICK_SLOP = 6;
 
@@ -99,11 +100,15 @@ function getBoardAfterDrag(drag: DragState, draggedTileAdvanced: boolean): Board
 }
 
 export function App({ createInitialGame = createGame }: AppProps) {
-  const [{ board, initialBoard }, setPuzzle] = useState(createInitialGame);
+  const [{ board }, setPuzzle] = useState(createInitialGame);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const [moves, setMoves] = useState(0);
+  const [completedScore, setCompletedScore] = useState<{ timeInSeconds: number; moves: number } | null>(null);
   const [dragVisual, setDragVisual] = useState<DragVisual>(null);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [isCompletionSheetOpen, setIsCompletionSheetOpen] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
   const dragState = useRef<DragState | null>(null);
   const suppressNextClick = useRef(false);
@@ -156,12 +161,20 @@ export function App({ createInitialGame = createGame }: AppProps) {
   );
 
   function applyBoard(nextBoard: Board) {
+    const nextMoves = moves + 1;
+
     setPuzzle((current) => ({ ...current, board: nextBoard }));
+    setMoves(nextMoves);
     setHasStarted(true);
 
     if (isSolved(nextBoard)) {
       setIsComplete(true);
       setHasStarted(false);
+      setCompletedScore({
+        timeInSeconds: elapsedSeconds,
+        moves: nextMoves,
+      });
+      setIsCompletionSheetOpen(true);
     }
   }
 
@@ -174,23 +187,14 @@ export function App({ createInitialGame = createGame }: AppProps) {
     }
   }
 
-  function restart() {
-    setPuzzle((current) => ({
-      initialBoard: current.initialBoard,
-      board: [...current.initialBoard],
-    }));
-    setElapsedSeconds(0);
-    setHasStarted(false);
-    setIsComplete(false);
-    setDragVisual(null);
-    dragState.current = null;
-  }
-
   function newGame() {
     setPuzzle(createInitialGame());
     setElapsedSeconds(0);
+    setMoves(0);
     setHasStarted(false);
     setIsComplete(false);
+    setCompletedScore(null);
+    setIsCompletionSheetOpen(false);
     setDragVisual(null);
     dragState.current = null;
   }
@@ -345,15 +349,66 @@ export function App({ createInitialGame = createGame }: AppProps) {
           })}
         </div>
 
-        <div className="actions">
-          <button type="button" onClick={restart}>Restart</button>
-          <button type="button" onClick={newGame}>New game</button>
-        </div>
-
         <p className="status" aria-live="polite">
           {isComplete ? 'Solved. Beautifully done.' : hasStarted ? 'Timer running' : 'Timer starts on your first move'}
         </p>
+
+        <div className="actions">
+          <button type="button" onClick={() => setIsLeaderboardOpen(true)}>Leaderboard</button>
+          <button type="button" onClick={newGame}>New game</button>
+        </div>
       </section>
+
+      {isLeaderboardOpen && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setIsLeaderboardOpen(false)}
+        >
+          <section
+            className="modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Leaderboard"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              className="modal-close"
+              type="button"
+              onClick={() => setIsLeaderboardOpen(false)}
+              aria-label="Close leaderboard"
+            >
+              Close
+            </button>
+            <Leaderboard />
+          </section>
+        </div>
+      )}
+
+      {isCompletionSheetOpen && completedScore && (
+        <div className="completion-backdrop" role="presentation">
+          <section
+            className="completion-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Puzzle completed"
+          >
+            <button
+              className="modal-close"
+              type="button"
+              onClick={() => setIsCompletionSheetOpen(false)}
+              aria-label="Close completion panel"
+            >
+              Close
+            </button>
+            <Leaderboard
+              completedScore={completedScore}
+              showSubmit
+              title="Solved"
+            />
+          </section>
+        </div>
+      )}
     </main>
   );
 }
