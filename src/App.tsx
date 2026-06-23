@@ -17,8 +17,10 @@ type DragState = {
   axis: SlideAxis;
   board: Board;
   direction: 1 | -1;
+  followerOffset: number;
   hasMoved: boolean;
   indexes: number[];
+  lockedFollowers: boolean;
   offset: number;
   pointerId: number;
   startX: number;
@@ -29,8 +31,7 @@ type DragState = {
 
 type DragVisual = {
   axis: SlideAxis;
-  indexes: number[];
-  offset: number;
+  offsets: Map<number, number>;
 } | null;
 
 type GameState = {
@@ -62,6 +63,39 @@ function getDragOffset(drag: DragState, clientX: number, clientY: number): numbe
 
 function getDragDistance(drag: DragState, clientX: number, clientY: number): number {
   return Math.max(Math.abs(clientX - drag.startX), Math.abs(clientY - drag.startY));
+}
+
+function getDragVisual(drag: DragState, offset: number): DragVisual {
+  const offsets = new Map<number, number>();
+
+  if (!drag.lockedFollowers) {
+    drag.indexes.forEach((index) => offsets.set(index, offset));
+    return { axis: drag.axis, offsets };
+  }
+
+  drag.indexes.forEach((index, position) => {
+    offsets.set(index, position === 0 ? offset : drag.followerOffset);
+  });
+
+  return { axis: drag.axis, offsets };
+}
+
+function getBoardAfterDrag(drag: DragState, draggedTileAdvanced: boolean): Board {
+  if (!drag.lockedFollowers && !draggedTileAdvanced) {
+    return drag.board;
+  }
+
+  const firstShiftedPosition = draggedTileAdvanced ? 0 : 1;
+  const emptyIndex = drag.board.indexOf(null);
+  const path = [...drag.indexes, emptyIndex];
+  const next = [...drag.board];
+
+  for (let index = path.length - 1; index > firstShiftedPosition; index -= 1) {
+    next[path[index]] = drag.board[path[index - 1]];
+  }
+
+  next[path[firstShiftedPosition]] = null;
+  return next;
 }
 
 export function App({ createInitialGame = createGame }: AppProps) {
@@ -180,7 +214,9 @@ export function App({ createInitialGame = createGame }: AppProps) {
     dragState.current = {
       ...group,
       board,
+      followerOffset: 0,
       hasMoved: false,
+      lockedFollowers: false,
       offset: 0,
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -204,12 +240,16 @@ export function App({ createInitialGame = createGame }: AppProps) {
       suppressNextClick.current = true;
     }
 
+    if (Math.abs(offset) > Math.abs(currentDrag.followerOffset)) {
+      currentDrag.followerOffset = offset;
+    }
+
+    if (currentDrag.indexes.length > 1 && Math.abs(currentDrag.followerOffset) >= currentDrag.step / 2) {
+      currentDrag.lockedFollowers = true;
+    }
+
     currentDrag.offset = offset;
-    setDragVisual({
-      axis: currentDrag.axis,
-      indexes: currentDrag.indexes,
-      offset,
-    });
+    setDragVisual(getDragVisual(currentDrag, offset));
 
     return true;
   }
@@ -223,14 +263,28 @@ export function App({ createInitialGame = createGame }: AppProps) {
 
     const finalOffset = getDragOffset(currentDrag, clientX, clientY);
     const traveled = getDragDistance(currentDrag, clientX, clientY);
+    const draggedTileAdvanced = Math.abs(finalOffset) >= currentDrag.step / 2;
+
+    if (Math.abs(finalOffset) > Math.abs(currentDrag.followerOffset)) {
+      currentDrag.followerOffset = finalOffset;
+    }
+
+    if (currentDrag.indexes.length > 1 && Math.abs(currentDrag.followerOffset) >= currentDrag.step / 2) {
+      currentDrag.lockedFollowers = true;
+    }
+
     currentDrag.offset = finalOffset;
     currentDrag.hasMoved = currentDrag.hasMoved || traveled > CLICK_SLOP;
     suppressNextClick.current = currentDrag.hasMoved;
     dragState.current = null;
     setDragVisual(null);
 
-    if (shouldCommit && Math.abs(finalOffset) >= currentDrag.step / 2) {
-      applyBoard(slideTiles(currentDrag.board, currentDrag.tileIndex));
+    if (shouldCommit) {
+      const nextBoard = getBoardAfterDrag(currentDrag, draggedTileAdvanced);
+
+      if (nextBoard !== currentDrag.board) {
+        applyBoard(nextBoard);
+      }
     }
 
     return true;
@@ -258,8 +312,8 @@ export function App({ createInitialGame = createGame }: AppProps) {
             const row = Math.floor(index / BOARD_SIZE);
             const col = index % BOARD_SIZE;
             const movable = canSlide(board, index);
-            const isDragging = dragVisual?.indexes.includes(index) ?? false;
-            const dragOffset = isDragging ? dragVisual?.offset ?? 0 : 0;
+            const dragOffset = dragVisual?.offsets.get(index) ?? 0;
+            const isDragging = dragVisual?.offsets.has(index) ?? false;
             const xOffset = dragVisual?.axis === 'x' ? dragOffset : 0;
             const yOffset = dragVisual?.axis === 'y' ? dragOffset : 0;
 

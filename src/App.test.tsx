@@ -22,6 +22,10 @@ function renderWithBoard(board: Board = ROW_SLIDE_BOARD) {
 }
 
 function dragTile(label: string, endX: number) {
+  return dragTilePath(label, [endX]);
+}
+
+function dragTilePath(label: string, clientXs: number[]) {
   const tile = screen.getByRole('button', { name: label });
   const createPointerEvent = (type: string, clientX: number) => {
     const event = new Event(type, { bubbles: true, cancelable: true });
@@ -36,10 +40,36 @@ function dragTile(label: string, endX: number) {
   };
 
   fireEvent(tile, createPointerEvent('pointerdown', 0));
-  fireEvent(window, createPointerEvent('pointermove', endX));
-  fireEvent(window, createPointerEvent('pointerup', endX));
+  clientXs.forEach((clientX) => {
+    fireEvent(window, createPointerEvent('pointermove', clientX));
+  });
+  fireEvent(window, createPointerEvent('pointerup', clientXs.at(-1) ?? 0));
 
   return tile;
+}
+
+function startDragTilePath(label: string, clientXs: number[]) {
+  const tile = screen.getByRole('button', { name: label });
+  const createPointerEvent = (type: string, clientX: number) => {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+
+    Object.defineProperties(event, {
+      clientX: { value: clientX },
+      clientY: { value: 0 },
+      pointerId: { value: 1 },
+    });
+
+    return event;
+  };
+
+  fireEvent(tile, createPointerEvent('pointerdown', 0));
+  clientXs.forEach((clientX) => {
+    fireEvent(window, createPointerEvent('pointermove', clientX));
+  });
+
+  return {
+    release: (clientX: number) => fireEvent(window, createPointerEvent('pointerup', clientX)),
+  };
 }
 
 describe('App drag interaction', () => {
@@ -84,5 +114,29 @@ describe('App drag interaction', () => {
     expect(screen.getByRole('button', { name: 'Tile 6, movable' }).getAttribute('data-cell-index')).toBe('6');
     expect(screen.getByRole('button', { name: 'Tile 7, movable' }).getAttribute('data-cell-index')).toBe('7');
     expect(screen.getByText('Timer running')).toBeTruthy();
+  });
+
+  it('keeps follower tiles pushed when the dragged tile returns before release', () => {
+    renderWithBoard();
+
+    dragTilePath('Tile 5, movable', [60, 0]);
+
+    expect(screen.getByRole('button', { name: 'Tile 5, movable' }).getAttribute('data-cell-index')).toBe('4');
+    expect(screen.getByRole('button', { name: 'Tile 6, movable' }).getAttribute('data-cell-index')).toBe('6');
+    expect(screen.getByRole('button', { name: 'Tile 7, movable' }).getAttribute('data-cell-index')).toBe('7');
+    expect(screen.getByText('Timer running')).toBeTruthy();
+  });
+
+  it('does not snap follower tiles into place until release', () => {
+    renderWithBoard();
+
+    const drag = startDragTilePath('Tile 5, movable', [60, 20]);
+
+    expect(screen.getByRole('button', { name: 'Tile 5, movable' }).style.transform).toContain('+ 20px');
+    expect(screen.getByRole('button', { name: 'Tile 6, movable' }).style.transform).toContain('+ 60px');
+    expect(screen.getByRole('button', { name: 'Tile 7, movable' }).style.transform).toContain('+ 60px');
+    expect(screen.getByRole('button', { name: 'Tile 6, movable' }).style.transform).not.toContain('+ 88px');
+
+    drag.release(20);
   });
 });
