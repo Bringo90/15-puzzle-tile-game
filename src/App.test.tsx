@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { App } from './App';
-import { Board } from './puzzle';
+import { Board, GridSize } from './puzzle';
 
 const ROW_SLIDE_BOARD: Board = [
   1, 2, 3, 4,
@@ -17,11 +17,12 @@ const ONE_MOVE_FROM_SOLVED_BOARD: Board = [
   13, 14, null, 15,
 ];
 
-function renderWithBoard(board: Board = ROW_SLIDE_BOARD) {
+function renderWithBoard(board: Board = ROW_SLIDE_BOARD, gridSize: GridSize = 4) {
   return render(
     <App
       createInitialGame={() => ({
         board: [...board],
+        gridSize,
         initialBoard: [...board],
       })}
     />,
@@ -81,6 +82,7 @@ function startDragTilePath(label: string, clientXs: number[]) {
 
 describe('App drag interaction', () => {
   beforeEach(() => {
+    window.localStorage.clear();
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
 
     vi.spyOn(window, 'getComputedStyle').mockImplementation(() => ({
@@ -112,7 +114,7 @@ describe('App drag interaction', () => {
     const tile = dragTile('Tile 5, movable', 30);
 
     expect(tile.getAttribute('data-cell-index')).toBe('4');
-    expect(screen.getByLabelText('Elapsed time').textContent).toBe('00:00');
+    expect(screen.getByLabelText('Elapsed time').textContent).toContain('00:00');
   });
 
   it('slides every tile between the dragged tile and the empty cell', () => {
@@ -166,5 +168,61 @@ describe('App drag interaction', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tile 15, movable' }));
 
     expect(screen.getByRole('dialog', { name: 'Puzzle completed' })).toBeTruthy();
+  });
+
+  it('shows moves and resets them on a new game', () => {
+    renderWithBoard();
+
+    expect(screen.getByLabelText('Moves').textContent).toContain('0');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tile 5, movable' }));
+
+    expect(screen.getByLabelText('Moves').textContent).toContain('1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'New game' }));
+
+    expect(screen.getByLabelText('Moves').textContent).toContain('0');
+  });
+
+  it('continues the move count when a drag follows a click move', () => {
+    renderWithBoard();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tile 7, movable' }));
+    expect(screen.getByLabelText('Moves').textContent).toContain('1');
+
+    dragTile('Tile 6, movable', 60);
+
+    expect(screen.getByLabelText('Moves').textContent).toContain('2');
+  });
+
+  it('opens difficulty choices in a modal without resetting the game', () => {
+    renderWithBoard();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tile 5, movable' }));
+    expect(screen.getByLabelText('Moves').textContent).toContain('1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Difficulty' }));
+
+    expect(screen.getByRole('dialog', { name: 'Choose difficulty' })).toBeTruthy();
+    expect(screen.getByLabelText('Moves').textContent).toContain('1');
+
+    fireEvent.click(screen.getByRole('presentation'));
+
+    expect(screen.queryByRole('dialog', { name: 'Choose difficulty' })).toBeNull();
+    expect(screen.getByLabelText('Moves').textContent).toContain('1');
+  });
+
+  it('changes board size when selecting a difficulty in the modal', () => {
+    render(<App />);
+
+    expect(screen.getAllByRole('button', { name: /^Tile/ })).toHaveLength(15);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Difficulty' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Easy 3x3' }));
+    expect(screen.getAllByRole('button', { name: /^Tile/ })).toHaveLength(8);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Difficulty' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Hard 5x5' }));
+    expect(screen.getAllByRole('button', { name: /^Tile/ })).toHaveLength(24);
   });
 });

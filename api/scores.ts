@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 type ScorePayload = {
+  grid_size?: unknown;
   player_name?: unknown;
   time_in_seconds?: unknown;
   moves?: unknown;
@@ -34,6 +35,11 @@ function parsePositiveInteger(value: unknown): number {
   return typeof value === 'number' && Number.isInteger(value) ? value : Number.NaN;
 }
 
+function parseGridSize(value: unknown): number {
+  const parsed = typeof value === 'string' ? Number(value) : value;
+  return parsed === 3 || parsed === 4 || parsed === 5 ? parsed : Number.NaN;
+}
+
 export default async function handler(request: any, response: any) {
   response.setHeader('Cache-Control', 'no-store');
 
@@ -41,9 +47,17 @@ export default async function handler(request: any, response: any) {
     const supabase = getSupabase();
 
     if (request.method === 'GET') {
+      const gridSize = parseGridSize(request.query?.grid_size ?? 4);
+
+      if (!Number.isFinite(gridSize)) {
+        sendJson(response, 400, { error: 'Grid size is not valid' });
+        return;
+      }
+
       const { data, error } = await supabase
         .from('scores')
-        .select('id, player_name, time_in_seconds, moves, created_at')
+        .select('id, player_name, time_in_seconds, moves, grid_size, created_at')
+        .eq('grid_size', gridSize)
         .order('time_in_seconds', { ascending: true })
         .order('moves', { ascending: true })
         .order('created_at', { ascending: true })
@@ -61,11 +75,17 @@ export default async function handler(request: any, response: any) {
     if (request.method === 'POST') {
       const payload = request.body as ScorePayload;
       const playerName = cleanPlayerName(payload.player_name);
+      const gridSize = parseGridSize(payload.grid_size);
       const timeInSeconds = parsePositiveInteger(payload.time_in_seconds);
       const moves = parsePositiveInteger(payload.moves);
 
       if (!playerName) {
         sendJson(response, 400, { error: 'Player name is required' });
+        return;
+      }
+
+      if (!Number.isFinite(gridSize)) {
+        sendJson(response, 400, { error: 'Grid size is not valid' });
         return;
       }
 
@@ -83,10 +103,11 @@ export default async function handler(request: any, response: any) {
         .from('scores')
         .insert({
           player_name: playerName,
+          grid_size: gridSize,
           time_in_seconds: timeInSeconds,
           moves,
         })
-        .select('id, player_name, time_in_seconds, moves, created_at')
+        .select('id, player_name, time_in_seconds, moves, grid_size, created_at')
         .single();
 
       if (error) {

@@ -1,13 +1,27 @@
 export type Tile = number | null;
 export type Board = Tile[];
+export type GridSize = 3 | 4 | 5;
 
-export const BOARD_SIZE = 4;
+export const DEFAULT_GRID_SIZE: GridSize = 4;
+export const BOARD_SIZE = DEFAULT_GRID_SIZE;
 export const TILE_COUNT = BOARD_SIZE * BOARD_SIZE;
-export const SOLVED_BOARD: Board = [
-  1, 2, 3, 4,
-  5, 6, 7, 8,
-  9, 10, 11, 12,
-  13, 14, 15, null,
+
+export const SHUFFLE_MOVES: Record<GridSize, number> = {
+  3: 30,
+  4: 100,
+  5: 200,
+};
+
+export type Difficulty = {
+  gridSize: GridSize;
+  label: string;
+  stars: string;
+};
+
+export const DIFFICULTIES: Difficulty[] = [
+  { gridSize: 3, label: 'Easy', stars: '★' },
+  { gridSize: 4, label: 'Medium', stars: '★★' },
+  { gridSize: 5, label: 'Hard', stars: '★★★' },
 ];
 
 export type Direction = 'up' | 'down' | 'left' | 'right';
@@ -19,29 +33,40 @@ export type SlideGroup = {
   indexes: number[];
 };
 
-export function isSolved(board: Board): boolean {
-  return board.every((tile, index) => tile === SOLVED_BOARD[index]);
+export function createSolvedBoard(gridSize: GridSize = DEFAULT_GRID_SIZE): Board {
+  return Array.from({ length: gridSize * gridSize }, (_, index) => (
+    index === gridSize * gridSize - 1 ? null : index + 1
+  ));
+}
+
+export const SOLVED_BOARD: Board = createSolvedBoard(DEFAULT_GRID_SIZE);
+
+export function isSolved(board: Board, gridSize: GridSize = DEFAULT_GRID_SIZE): boolean {
+  const solvedBoard = createSolvedBoard(gridSize);
+  return board.length === solvedBoard.length && board.every((tile, index) => tile === solvedBoard[index]);
 }
 
 export function getEmptyIndex(board: Board): number {
   return board.indexOf(null);
 }
 
-export function areAdjacent(indexA: number, indexB: number): boolean {
-  const rowA = Math.floor(indexA / BOARD_SIZE);
-  const colA = indexA % BOARD_SIZE;
-  const rowB = Math.floor(indexB / BOARD_SIZE);
-  const colB = indexB % BOARD_SIZE;
+export function areAdjacent(indexA: number, indexB: number, gridSize: GridSize = DEFAULT_GRID_SIZE): boolean {
+  const rowA = Math.floor(indexA / gridSize);
+  const colA = indexA % gridSize;
+  const rowB = Math.floor(indexB / gridSize);
+  const colB = indexB % gridSize;
 
   return Math.abs(rowA - rowB) + Math.abs(colA - colB) === 1;
 }
 
-export function canMove(board: Board, tileIndex: number): boolean {
-  return tileIndex >= 0 && tileIndex < TILE_COUNT && areAdjacent(tileIndex, getEmptyIndex(board));
+export function canMove(board: Board, tileIndex: number, gridSize: GridSize = DEFAULT_GRID_SIZE): boolean {
+  return tileIndex >= 0
+    && tileIndex < gridSize * gridSize
+    && areAdjacent(tileIndex, getEmptyIndex(board), gridSize);
 }
 
-export function moveTile(board: Board, tileIndex: number): Board {
-  if (!canMove(board, tileIndex)) {
+export function moveTile(board: Board, tileIndex: number, gridSize: GridSize = DEFAULT_GRID_SIZE): Board {
+  if (!canMove(board, tileIndex, gridSize)) {
     return board;
   }
 
@@ -52,17 +77,21 @@ export function moveTile(board: Board, tileIndex: number): Board {
   return next;
 }
 
-export function getSlideGroup(board: Board, tileIndex: number): SlideGroup | null {
+export function getSlideGroup(
+  board: Board,
+  tileIndex: number,
+  gridSize: GridSize = DEFAULT_GRID_SIZE,
+): SlideGroup | null {
   const emptyIndex = getEmptyIndex(board);
 
-  if (tileIndex === emptyIndex || tileIndex < 0 || tileIndex >= TILE_COUNT) {
+  if (tileIndex === emptyIndex || tileIndex < 0 || tileIndex >= gridSize * gridSize) {
     return null;
   }
 
-  const tileRow = Math.floor(tileIndex / BOARD_SIZE);
-  const tileCol = tileIndex % BOARD_SIZE;
-  const emptyRow = Math.floor(emptyIndex / BOARD_SIZE);
-  const emptyCol = emptyIndex % BOARD_SIZE;
+  const tileRow = Math.floor(tileIndex / gridSize);
+  const tileCol = tileIndex % gridSize;
+  const emptyRow = Math.floor(emptyIndex / gridSize);
+  const emptyCol = emptyIndex % gridSize;
   const sameRow = tileRow === emptyRow;
   const sameCol = tileCol === emptyCol;
 
@@ -72,7 +101,7 @@ export function getSlideGroup(board: Board, tileIndex: number): SlideGroup | nul
 
   const step = sameRow
     ? emptyCol > tileCol ? 1 : -1
-    : emptyRow > tileRow ? BOARD_SIZE : -BOARD_SIZE;
+    : emptyRow > tileRow ? gridSize : -gridSize;
   const indexes: number[] = [];
 
   for (let index = tileIndex; index !== emptyIndex; index += step) {
@@ -86,12 +115,12 @@ export function getSlideGroup(board: Board, tileIndex: number): SlideGroup | nul
   };
 }
 
-export function canSlide(board: Board, tileIndex: number): boolean {
-  return getSlideGroup(board, tileIndex) !== null;
+export function canSlide(board: Board, tileIndex: number, gridSize: GridSize = DEFAULT_GRID_SIZE): boolean {
+  return getSlideGroup(board, tileIndex, gridSize) !== null;
 }
 
-export function slideTiles(board: Board, tileIndex: number): Board {
-  const group = getSlideGroup(board, tileIndex);
+export function slideTiles(board: Board, tileIndex: number, gridSize: GridSize = DEFAULT_GRID_SIZE): Board {
+  const group = getSlideGroup(board, tileIndex, gridSize);
 
   if (!group) {
     return board;
@@ -108,34 +137,38 @@ export function slideTiles(board: Board, tileIndex: number): Board {
   return next;
 }
 
-export function getMovableIndexes(board: Board): number[] {
+export function getMovableIndexes(board: Board, gridSize: GridSize = DEFAULT_GRID_SIZE): number[] {
   const emptyIndex = getEmptyIndex(board);
-  const row = Math.floor(emptyIndex / BOARD_SIZE);
-  const col = emptyIndex % BOARD_SIZE;
+  const row = Math.floor(emptyIndex / gridSize);
+  const col = emptyIndex % gridSize;
   const candidates = [
-    row > 0 ? emptyIndex - BOARD_SIZE : -1,
-    row < BOARD_SIZE - 1 ? emptyIndex + BOARD_SIZE : -1,
+    row > 0 ? emptyIndex - gridSize : -1,
+    row < gridSize - 1 ? emptyIndex + gridSize : -1,
     col > 0 ? emptyIndex - 1 : -1,
-    col < BOARD_SIZE - 1 ? emptyIndex + 1 : -1,
+    col < gridSize - 1 ? emptyIndex + 1 : -1,
   ];
 
   return candidates.filter((index) => index !== -1);
 }
 
-export function getTileIndexForEmptyMove(board: Board, direction: Direction): number | null {
+export function getTileIndexForEmptyMove(
+  board: Board,
+  direction: Direction,
+  gridSize: GridSize = DEFAULT_GRID_SIZE,
+): number | null {
   const emptyIndex = getEmptyIndex(board);
-  const row = Math.floor(emptyIndex / BOARD_SIZE);
-  const col = emptyIndex % BOARD_SIZE;
+  const row = Math.floor(emptyIndex / gridSize);
+  const col = emptyIndex % gridSize;
 
-  if (direction === 'up' && row < BOARD_SIZE - 1) return emptyIndex + BOARD_SIZE;
-  if (direction === 'down' && row > 0) return emptyIndex - BOARD_SIZE;
-  if (direction === 'left' && col < BOARD_SIZE - 1) return emptyIndex + 1;
+  if (direction === 'up' && row < gridSize - 1) return emptyIndex + gridSize;
+  if (direction === 'down' && row > 0) return emptyIndex - gridSize;
+  if (direction === 'left' && col < gridSize - 1) return emptyIndex + 1;
   if (direction === 'right' && col > 0) return emptyIndex - 1;
 
   return null;
 }
 
-export function isSolvable(board: Board): boolean {
+export function isSolvable(board: Board, gridSize: GridSize = DEFAULT_GRID_SIZE): boolean {
   const inversions = board
     .filter((tile): tile is number => tile !== null)
     .reduce((count, tile, index, tiles) => {
@@ -143,34 +176,47 @@ export function isSolvable(board: Board): boolean {
       return count + laterSmallerTiles;
     }, 0);
 
-  const emptyRowFromBottom = BOARD_SIZE - Math.floor(getEmptyIndex(board) / BOARD_SIZE);
+  if (gridSize % 2 === 1) {
+    return inversions % 2 === 0;
+  }
+
+  const emptyRowFromBottom = gridSize - Math.floor(getEmptyIndex(board) / gridSize);
   return emptyRowFromBottom % 2 === 0 ? inversions % 2 === 1 : inversions % 2 === 0;
 }
 
-export function createScrambledBoard(moves = 180, random = Math.random): Board {
-  let board = [...SOLVED_BOARD];
+export function createScrambledBoard(
+  gridSize: GridSize = DEFAULT_GRID_SIZE,
+  moves = SHUFFLE_MOVES[gridSize],
+  random = Math.random,
+): Board {
+  let board = createSolvedBoard(gridSize);
   let previousEmptyIndex = -1;
 
   for (let move = 0; move < moves; move += 1) {
     const emptyIndex = getEmptyIndex(board);
-    const movable = getMovableIndexes(board).filter((index) => index !== previousEmptyIndex);
-    const nextTileIndex = movable[Math.floor(random() * movable.length)];
+    const movable = getMovableIndexes(board, gridSize).filter((index) => index !== previousEmptyIndex);
+    const candidates = movable.length > 0 ? movable : getMovableIndexes(board, gridSize);
+    const nextTileIndex = candidates[Math.floor(random() * candidates.length)];
     previousEmptyIndex = emptyIndex;
-    board = moveTile(board, nextTileIndex);
+    board = moveTile(board, nextTileIndex, gridSize);
   }
 
-  if (isSolved(board)) {
-    const firstMove = getMovableIndexes(board)[0];
-    board = moveTile(board, firstMove);
+  if (isSolved(board, gridSize)) {
+    const firstMove = getMovableIndexes(board, gridSize)[0];
+    board = moveTile(board, firstMove, gridSize);
   }
 
   return board;
 }
 
-export function createGame(random = Math.random): { board: Board; initialBoard: Board } {
-  const board = createScrambledBoard(180, random);
+export function createGame(
+  gridSize: GridSize = DEFAULT_GRID_SIZE,
+  random = Math.random,
+): { board: Board; initialBoard: Board; gridSize: GridSize } {
+  const board = createScrambledBoard(gridSize, SHUFFLE_MOVES[gridSize], random);
   return {
     board,
     initialBoard: [...board],
+    gridSize,
   };
 }

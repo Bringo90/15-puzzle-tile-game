@@ -1,11 +1,13 @@
-import { PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { CSSProperties, PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Board,
-  BOARD_SIZE,
-  SOLVED_BOARD,
+  DEFAULT_GRID_SIZE,
+  DIFFICULTIES,
+  GridSize,
   SlideAxis,
   canSlide,
   createGame,
+  createSolvedBoard,
   getSlideGroup,
   isSolved,
   slideTiles,
@@ -37,12 +39,26 @@ type DragVisual = {
 
 type GameState = {
   board: Board;
+  gridSize: GridSize;
   initialBoard: Board;
 };
 
 type AppProps = {
-  createInitialGame?: () => GameState;
+  createInitialGame?: (gridSize?: GridSize) => GameState;
 };
+
+const STORAGE_KEY = '15-puzzle-grid-size';
+
+function getStoredGridSize(): GridSize {
+  if (typeof window === 'undefined') {
+    return DEFAULT_GRID_SIZE;
+  }
+
+  const storedGridSize = Number(window.localStorage.getItem(STORAGE_KEY));
+  return storedGridSize === 3 || storedGridSize === 4 || storedGridSize === 5
+    ? storedGridSize
+    : DEFAULT_GRID_SIZE;
+}
 
 function formatTime(seconds: number): string {
   const minutes = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -100,14 +116,16 @@ function getBoardAfterDrag(drag: DragState, draggedTileAdvanced: boolean): Board
 }
 
 export function App({ createInitialGame = createGame }: AppProps) {
-  const [{ board }, setPuzzle] = useState(createInitialGame);
+  const [gridSize, setGridSize] = useState<GridSize>(getStoredGridSize);
+  const [{ board }, setPuzzle] = useState(() => createInitialGame(gridSize));
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [moves, setMoves] = useState(0);
-  const [completedScore, setCompletedScore] = useState<{ timeInSeconds: number; moves: number } | null>(null);
+  const [completedScore, setCompletedScore] = useState<{ timeInSeconds: number; moves: number; gridSize: GridSize } | null>(null);
   const [dragVisual, setDragVisual] = useState<DragVisual>(null);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [isDifficultyOpen, setIsDifficultyOpen] = useState(false);
   const [isCompletionSheetOpen, setIsCompletionSheetOpen] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
   const dragState = useRef<DragState | null>(null);
@@ -156,12 +174,14 @@ export function App({ createInitialGame = createGame }: AppProps) {
       window.removeEventListener('pointerup', handleWindowPointerUp);
       window.removeEventListener('pointercancel', handleWindowPointerCancel);
     };
-  }, []);
+  });
 
   const tilePositions = useMemo(
     () => new Map(board.map((tile, index) => [tile, index])),
     [board],
   );
+
+  const solvedBoard = useMemo(() => createSolvedBoard(gridSize), [gridSize]);
 
   function applyBoard(nextBoard: Board) {
     const nextMoves = moves + 1;
@@ -175,12 +195,13 @@ export function App({ createInitialGame = createGame }: AppProps) {
     setElapsedSeconds(nextElapsedSeconds);
     setHasStarted(true);
 
-    if (isSolved(nextBoard)) {
+    if (isSolved(nextBoard, gridSize)) {
       setIsComplete(true);
       setHasStarted(false);
       setCompletedScore({
         timeInSeconds: nextElapsedSeconds,
         moves: nextMoves,
+        gridSize,
       });
       setIsCompletionSheetOpen(true);
     }
@@ -188,7 +209,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
 
   function handleTileMove(tile: number) {
     const tileIndex = board.indexOf(tile);
-    const nextBoard = slideTiles(board, tileIndex);
+    const nextBoard = slideTiles(board, tileIndex, gridSize);
 
     if (nextBoard !== board) {
       applyBoard(nextBoard);
@@ -196,13 +217,30 @@ export function App({ createInitialGame = createGame }: AppProps) {
   }
 
   function newGame() {
-    setPuzzle(createInitialGame());
+    setPuzzle(createInitialGame(gridSize));
     setElapsedSeconds(0);
     setMoves(0);
     setHasStarted(false);
     setIsComplete(false);
     setCompletedScore(null);
     setIsCompletionSheetOpen(false);
+    setIsDifficultyOpen(false);
+    setDragVisual(null);
+    timerStartedAt.current = null;
+    dragState.current = null;
+  }
+
+  function changeDifficulty(nextGridSize: GridSize) {
+    window.localStorage.setItem(STORAGE_KEY, String(nextGridSize));
+    setGridSize(nextGridSize);
+    setPuzzle(createInitialGame(nextGridSize));
+    setElapsedSeconds(0);
+    setMoves(0);
+    setHasStarted(false);
+    setIsComplete(false);
+    setCompletedScore(null);
+    setIsCompletionSheetOpen(false);
+    setIsDifficultyOpen(false);
     setDragVisual(null);
     timerStartedAt.current = null;
     dragState.current = null;
@@ -210,7 +248,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
 
   function handlePointerDown(event: PointerEvent<HTMLButtonElement>, tile: number) {
     const tileIndex = board.indexOf(tile);
-    const group = getSlideGroup(board, tileIndex);
+    const group = getSlideGroup(board, tileIndex, gridSize);
     const boardElement = boardRef.current;
 
     if (!group || !boardElement) {
@@ -311,20 +349,28 @@ export function App({ createInitialGame = createGame }: AppProps) {
             <p className="eyebrow">Classic 15 Puzzle</p>
             <h1>Slide the grid home</h1>
           </div>
-          <time className="timer" aria-label="Elapsed time">
-            {formatTime(elapsedSeconds)}
-          </time>
+          <div className="stats" aria-label="Game stats">
+            <time className="stat" aria-label="Elapsed time">
+              <span>Time</span>
+              <strong>{formatTime(elapsedSeconds)}</strong>
+            </time>
+            <div className="stat" aria-label="Moves">
+              <span>Moves</span>
+              <strong>{moves}</strong>
+            </div>
+          </div>
         </header>
 
         <div
           ref={boardRef}
           className="board"
+          style={{ '--grid-size': gridSize } as CSSProperties}
         >
-          {SOLVED_BOARD.filter((tile): tile is number => tile !== null).map((tile) => {
+          {solvedBoard.filter((tile): tile is number => tile !== null).map((tile) => {
             const index = tilePositions.get(tile) ?? 0;
-            const row = Math.floor(index / BOARD_SIZE);
-            const col = index % BOARD_SIZE;
-            const movable = canSlide(board, index);
+            const row = Math.floor(index / gridSize);
+            const col = index % gridSize;
+            const movable = canSlide(board, index, gridSize);
             const dragOffset = dragVisual?.offsets.get(index) ?? 0;
             const isDragging = dragVisual?.offsets.has(index) ?? false;
             const xOffset = dragVisual?.axis === 'x' ? dragOffset : 0;
@@ -363,10 +409,55 @@ export function App({ createInitialGame = createGame }: AppProps) {
         </p>
 
         <div className="actions">
+          <button type="button" onClick={() => setIsDifficultyOpen(true)}>Difficulty</button>
           <button type="button" onClick={() => setIsLeaderboardOpen(true)}>Leaderboard</button>
           <button type="button" onClick={newGame}>New game</button>
         </div>
       </section>
+
+      {isDifficultyOpen && (
+        <div
+          className="modal-backdrop modal-backdrop--blur"
+          role="presentation"
+          onClick={() => setIsDifficultyOpen(false)}
+        >
+          <section
+            className="modal-panel difficulty-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Choose difficulty"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              className="modal-close"
+              type="button"
+              onClick={() => setIsDifficultyOpen(false)}
+              aria-label="Close difficulty"
+            >
+              Close
+            </button>
+            <h2>Difficulty</h2>
+            <div className="difficulty-options" role="radiogroup" aria-label="Difficulty">
+              {DIFFICULTIES.map((difficulty) => (
+                <button
+                  className="difficulty-option"
+                  data-selected={gridSize === difficulty.gridSize}
+                  key={difficulty.gridSize}
+                  type="button"
+                  role="radio"
+                  aria-label={`${difficulty.label} ${difficulty.gridSize}x${difficulty.gridSize}`}
+                  aria-checked={gridSize === difficulty.gridSize}
+                  onClick={() => changeDifficulty(difficulty.gridSize)}
+                >
+                  <span>{difficulty.stars}</span>
+                  <strong>{difficulty.label}</strong>
+                  <small>{difficulty.gridSize}x{difficulty.gridSize}</small>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
 
       {isLeaderboardOpen && (
         <div
@@ -389,7 +480,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
             >
               Close
             </button>
-            <Leaderboard />
+            <Leaderboard gridSize={gridSize} />
           </section>
         </div>
       )}
@@ -412,6 +503,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
             </button>
             <Leaderboard
               completedScore={completedScore}
+              gridSize={gridSize}
               showSubmit
               title="Solved"
             />

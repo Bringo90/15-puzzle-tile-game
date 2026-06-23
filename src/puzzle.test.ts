@@ -4,6 +4,7 @@ import {
   SOLVED_BOARD,
   createGame,
   createScrambledBoard,
+  createSolvedBoard,
   getSlideGroup,
   getMovableIndexes,
   isSolvable,
@@ -22,6 +23,17 @@ describe('puzzle logic', () => {
     expect(isSolved(board)).toBe(false);
   });
 
+  it('generates the correct board size for each difficulty', () => {
+    ([3, 4, 5] as const).forEach((gridSize) => {
+      const board = createScrambledBoard(gridSize);
+
+      expect(board).toHaveLength(gridSize * gridSize);
+      expect(new Set(board).size).toBe(gridSize * gridSize);
+      expect(isSolvable(board, gridSize)).toBe(true);
+      expect(isSolved(board, gridSize)).toBe(false);
+    });
+  });
+
   it('moves only tiles adjacent to the empty cell', () => {
     const board: Board = [
       1, 2, 3, 4,
@@ -32,6 +44,26 @@ describe('puzzle logic', () => {
 
     expect(moveTile(board, 15)).toEqual(SOLVED_BOARD);
     expect(moveTile(board, 0)).toBe(board);
+  });
+
+  it('moves and solves variable-sized boards', () => {
+    const easyBoard: Board = [
+      1, 2, 3,
+      4, 5, 6,
+      7, null, 8,
+    ];
+    const hardBoard: Board = [
+      1, 2, 3, 4, 5,
+      6, 7, 8, 9, 10,
+      11, 12, 13, 14, 15,
+      16, 17, 18, 19, 20,
+      21, 22, 23, null, 24,
+    ];
+
+    expect(moveTile(easyBoard, 8, 3)).toEqual(createSolvedBoard(3));
+    expect(moveTile(hardBoard, 24, 5)).toEqual(createSolvedBoard(5));
+    expect(isSolved(createSolvedBoard(3), 3)).toBe(true);
+    expect(isSolved(createSolvedBoard(5), 5)).toBe(true);
   });
 
   it('slides one, two, or three tiles in the empty row', () => {
@@ -101,10 +133,10 @@ describe('puzzle logic', () => {
   });
 
   it('keeps the original scramble separate for restart and creates fresh new games', () => {
-    const first = createGame(() => 0.1);
+    const first = createGame(4, () => 0.1);
     const moved = moveTile(first.board, getMovableIndexes(first.board)[0]);
     const restarted = [...first.initialBoard];
-    const second = createGame(() => 0.9);
+    const second = createGame(4, () => 0.9);
 
     expect(moved).not.toEqual(first.initialBoard);
     expect(restarted).toEqual(first.initialBoard);

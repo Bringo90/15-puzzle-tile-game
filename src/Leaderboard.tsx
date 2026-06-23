@@ -1,18 +1,22 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { DIFFICULTIES, GridSize } from './puzzle';
 
 export type Score = {
   id: number;
   player_name: string;
   time_in_seconds: number;
   moves: number;
+  grid_size: GridSize;
   created_at: string;
 };
 
 type LeaderboardProps = {
   completedScore?: {
+    gridSize: GridSize;
     timeInSeconds: number;
     moves: number;
   } | null;
+  gridSize: GridSize;
   showSubmit?: boolean;
   title?: string;
 };
@@ -53,6 +57,7 @@ function isTopTenScore(scores: Score[], completedScore: NonNullable<LeaderboardP
 
 export function Leaderboard({
   completedScore = null,
+  gridSize,
   showSubmit = false,
   title = 'Leaderboard',
 }: LeaderboardProps) {
@@ -69,7 +74,7 @@ export function Leaderboard({
     setMessage('');
 
     try {
-      const response = await fetch('/api/scores');
+      const response = await fetch(`/api/scores?grid_size=${gridSize}`);
       const body = await readJsonResponse(response);
 
       if (!response.ok) {
@@ -86,7 +91,7 @@ export function Leaderboard({
 
   useEffect(() => {
     void loadScores();
-  }, []);
+  }, [gridSize]);
 
   async function submitScore(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -106,6 +111,7 @@ export function Leaderboard({
         },
         body: JSON.stringify({
           player_name: playerName,
+          grid_size: completedScore.gridSize,
           time_in_seconds: completedScore.timeInSeconds,
           moves: completedScore.moves,
         }),
@@ -116,7 +122,7 @@ export function Leaderboard({
         throw new Error(body.error ?? 'Could not submit score');
       }
 
-      setSubmittedKey(`${completedScore.timeInSeconds}-${completedScore.moves}`);
+      setSubmittedKey(`${completedScore.gridSize}-${completedScore.timeInSeconds}-${completedScore.moves}`);
       setPlayerName('');
       setMessage('Score submitted');
       await loadScores();
@@ -128,7 +134,7 @@ export function Leaderboard({
     }
   }
 
-  const scoreKey = completedScore ? `${completedScore.timeInSeconds}-${completedScore.moves}` : '';
+  const scoreKey = completedScore ? `${completedScore.gridSize}-${completedScore.timeInSeconds}-${completedScore.moves}` : '';
   const canAssessScore = completedScore !== null && !isLoading;
   const isTooFastForSubmission = completedScore !== null && completedScore.timeInSeconds < 10;
   const qualifiesForTopTen = canAssessScore && isTopTenScore(scores, completedScore);
@@ -143,6 +149,10 @@ export function Leaderboard({
           Refresh
         </button>
       </div>
+
+      <p className="leaderboard__difficulty">
+        {DIFFICULTIES.find((difficulty) => difficulty.gridSize === gridSize)?.label} · {gridSize}x{gridSize}
+      </p>
 
       {showSubmit && completedScore && (
         <div className="completion-summary">
@@ -187,6 +197,7 @@ export function Leaderboard({
             <li className="score-row" key={score.id}>
               <span className="score-row__rank">{index + 1}</span>
               <span className="score-row__name">{score.player_name}</span>
+              <span className="score-row__difficulty">{score.grid_size}x{score.grid_size}</span>
               <span className="score-row__time">{formatTime(score.time_in_seconds)}</span>
               <span className="score-row__moves">{score.moves} moves</span>
             </li>

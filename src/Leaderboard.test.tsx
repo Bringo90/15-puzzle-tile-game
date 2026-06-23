@@ -23,7 +23,8 @@ describe('Leaderboard completion flow', () => {
 
     render(
       <Leaderboard
-        completedScore={{ timeInSeconds: 12, moves: 48 }}
+        completedScore={{ gridSize: 4, timeInSeconds: 12, moves: 48 }}
+        gridSize={4}
         showSubmit
         title="Solved"
       />,
@@ -39,7 +40,8 @@ describe('Leaderboard completion flow', () => {
 
     render(
       <Leaderboard
-        completedScore={{ timeInSeconds: 9, moves: 18 }}
+        completedScore={{ gridSize: 4, timeInSeconds: 9, moves: 18 }}
+        gridSize={4}
         showSubmit
         title="Solved"
       />,
