@@ -111,6 +111,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
   const [isCompletionSheetOpen, setIsCompletionSheetOpen] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
   const dragState = useRef<DragState | null>(null);
+  const timerStartedAt = useRef<number | null>(null);
   const suppressNextClick = useRef(false);
 
   useEffect(() => {
@@ -119,7 +120,9 @@ export function App({ createInitialGame = createGame }: AppProps) {
     }
 
     const timerId = window.setInterval(() => {
-      setElapsedSeconds((seconds) => seconds + 1);
+      if (timerStartedAt.current !== null) {
+        setElapsedSeconds(Math.floor((Date.now() - timerStartedAt.current) / 1000));
+      }
     }, 1000);
 
     return () => window.clearInterval(timerId);
@@ -162,16 +165,21 @@ export function App({ createInitialGame = createGame }: AppProps) {
 
   function applyBoard(nextBoard: Board) {
     const nextMoves = moves + 1;
+    const timerStart = timerStartedAt.current ?? Date.now();
+    const nextElapsedSeconds = Math.floor((Date.now() - timerStart) / 1000);
+
+    timerStartedAt.current = timerStart;
 
     setPuzzle((current) => ({ ...current, board: nextBoard }));
     setMoves(nextMoves);
+    setElapsedSeconds(nextElapsedSeconds);
     setHasStarted(true);
 
     if (isSolved(nextBoard)) {
       setIsComplete(true);
       setHasStarted(false);
       setCompletedScore({
-        timeInSeconds: elapsedSeconds,
+        timeInSeconds: nextElapsedSeconds,
         moves: nextMoves,
       });
       setIsCompletionSheetOpen(true);
@@ -196,6 +204,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
     setCompletedScore(null);
     setIsCompletionSheetOpen(false);
     setDragVisual(null);
+    timerStartedAt.current = null;
     dragState.current = null;
   }
 

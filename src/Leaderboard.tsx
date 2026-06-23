@@ -130,6 +130,7 @@ export function Leaderboard({
 
   const scoreKey = completedScore ? `${completedScore.timeInSeconds}-${completedScore.moves}` : '';
   const canAssessScore = completedScore !== null && !isLoading;
+  const isTooFastForSubmission = completedScore !== null && completedScore.timeInSeconds < 10;
   const qualifiesForTopTen = canAssessScore && isTopTenScore(scores, completedScore);
   const canSubmit = showSubmit && qualifiesForTopTen && scoreKey !== submittedKey;
   const showScores = !showSubmit || showScoresAfterSubmit || (canAssessScore && !qualifiesForTopTen);
@@ -171,7 +172,11 @@ export function Leaderboard({
       )}
 
       {showSubmit && completedScore && canAssessScore && !canSubmit && !showScoresAfterSubmit && (
-        <p className="leaderboard__message">Not quite top 10 this time.</p>
+        <p className="leaderboard__message">
+          {isTooFastForSubmission
+            ? 'Scores under 10 seconds are not submitted.'
+            : 'Not quite top 10 this time.'}
+        </p>
       )}
 
       {message && <p className="leaderboard__message">{message}</p>}
