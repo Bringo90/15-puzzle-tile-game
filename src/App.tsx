@@ -38,6 +38,9 @@ import {
 } from './themes';
 
 const CLICK_SLOP = 6;
+const BOARD_INTRO_MS = 700;
+const HINT_HOLD_MS = 500;
+const SURFACE_EXIT_MS = 220;
 
 type DragState = {
   axis: SlideAxis;
@@ -60,6 +63,14 @@ type DragVisual = {
   offsets: Map<number, number>;
 } | null;
 
+type HintHoldState = {
+  hintShown: boolean;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  timeoutId: number;
+};
+
 type GameState = {
   board: Board;
   gridSize: GridSize;
@@ -67,7 +78,10 @@ type GameState = {
 };
 
 type GameMode = 'classic' | 'adventure';
+type AppScreen = 'menu' | 'game';
 type AdventureStatus = 'idle' | 'playing' | 'failed' | 'complete';
+type BoardIntroMode = 'classic' | 'adventure' | null;
+type SurfaceName = 'adventure' | 'completion' | 'difficulty' | 'leaderboard' | 'theme';
 
 type AppProps = {
   createInitialGame?: (gridSize?: GridSize) => GameState;
@@ -155,16 +169,23 @@ export function App({ createInitialGame = createGame }: AppProps) {
   const [isThemeOpen, setIsThemeOpen] = useState(false);
   const [isAdventureOpen, setIsAdventureOpen] = useState(false);
   const [isCompletionSheetOpen, setIsCompletionSheetOpen] = useState(false);
+  const [isHintVisible, setIsHintVisible] = useState(false);
+  const [boardIntroMode, setBoardIntroMode] = useState<BoardIntroMode>(null);
+  const [hasSettledBoardIntro, setHasSettledBoardIntro] = useState(false);
+  const [closingSurfaces, setClosingSurfaces] = useState<Partial<Record<SurfaceName, boolean>>>({});
+  const [appScreen, setAppScreen] = useState<AppScreen>('menu');
   const [gameMode, setGameMode] = useState<GameMode>('classic');
   const [adventureProgress, setAdventureProgress] = useState<AdventureProgress>(getStoredAdventureProgress);
   const [adventureLevel, setAdventureLevel] = useState<AdventureLevel | null>(null);
-  const [previewLevel, setPreviewLevel] = useState<AdventureLevel | null>(null);
   const [adventureStatus, setAdventureStatus] = useState<AdventureStatus>('idle');
   const [themeProgress, setThemeProgress] = useState<ThemeProgress>(getStoredThemeProgress);
   const [selectedThemeId, setSelectedThemeId] = useState<ThemeId>(() => getStoredThemeId(themeProgress));
   const [themeMessage, setThemeMessage] = useState('');
   const boardRef = useRef<HTMLDivElement>(null);
+  const boardIntroTimer = useRef<number | null>(null);
+  const closingSurfaceTimers = useRef<Partial<Record<SurfaceName, number>>>({});
   const dragState = useRef<DragState | null>(null);
+  const hintHoldState = useRef<HintHoldState | null>(null);
   const timerStartedAt = useRef<number | null>(null);
   const suppressNextClick = useRef(false);
 
@@ -184,19 +205,27 @@ export function App({ createInitialGame = createGame }: AppProps) {
 
   useEffect(() => {
     function handleWindowPointerMove(event: globalThis.PointerEvent) {
+      updateHintHold(event.pointerId, event.clientX, event.clientY);
+
       if (updateDrag(event.pointerId, event.clientX, event.clientY)) {
         event.preventDefault();
       }
     }
 
     function handleWindowPointerUp(event: globalThis.PointerEvent) {
-      if (finishDrag(event.pointerId, event.clientX, event.clientY, true)) {
+      const finishedDrag = finishDrag(event.pointerId, event.clientX, event.clientY, true);
+      const finishedHint = finishHintHold(event.pointerId);
+
+      if (finishedDrag || finishedHint) {
         event.preventDefault();
       }
     }
 
     function handleWindowPointerCancel(event: globalThis.PointerEvent) {
-      if (finishDrag(event.pointerId, event.clientX, event.clientY, false)) {
+      const finishedDrag = finishDrag(event.pointerId, event.clientX, event.clientY, false);
+      const finishedHint = finishHintHold(event.pointerId);
+
+      if (finishedDrag || finishedHint) {
         event.preventDefault();
       }
     }
@@ -212,14 +241,74 @@ export function App({ createInitialGame = createGame }: AppProps) {
     };
   });
 
-  const tilePositions = useMemo(
-    () => new Map(board.map((tile, index) => [tile, index])),
-    [board],
-  );
+  useEffect(() => () => {
+    if (boardIntroTimer.current !== null) {
+      window.clearTimeout(boardIntroTimer.current);
+    }
+
+    Object.values(closingSurfaceTimers.current).forEach((timerId) => {
+      if (timerId !== undefined) {
+        window.clearTimeout(timerId);
+      }
+    });
+  }, []);
 
   const solvedBoard = useMemo(() => createSolvedBoard(gridSize), [gridSize]);
+  const displayBoard = boardIntroMode ? solvedBoard : board;
+  const tilePositions = useMemo(
+    () => new Map(displayBoard.map((tile, index) => [tile, index])),
+    [displayBoard],
+  );
   const isAdventure = gameMode === 'adventure' && adventureLevel !== null;
   const movesRemaining = adventureLevel ? Math.max(0, adventureLevel.maxMoves - moves) : 0;
+  const canContinueGame = moves > 0 || hasStarted || isComplete || isAdventure;
+
+  function startBoardIntro(mode: Exclude<BoardIntroMode, null>) {
+    setHasSettledBoardIntro(false);
+    setBoardIntroMode(mode);
+
+    if (boardIntroTimer.current !== null) {
+      window.clearTimeout(boardIntroTimer.current);
+    }
+
+    boardIntroTimer.current = window.setTimeout(() => {
+      setBoardIntroMode(null);
+      setHasSettledBoardIntro(true);
+      boardIntroTimer.current = null;
+    }, BOARD_INTRO_MS);
+  }
+
+  function openSurface(name: SurfaceName, setIsOpen: (isOpen: boolean) => void) {
+    const currentTimer = closingSurfaceTimers.current[name];
+
+    if (currentTimer !== undefined) {
+      window.clearTimeout(currentTimer);
+      delete closingSurfaceTimers.current[name];
+    }
+
+    setClosingSurfaces((current) => ({ ...current, [name]: false }));
+    setIsOpen(true);
+  }
+
+  function closeSurface(name: SurfaceName, setIsOpen: (isOpen: boolean) => void) {
+    setClosingSurfaces((current) => ({ ...current, [name]: true }));
+
+    const timerId = window.setTimeout(() => {
+      setIsOpen(false);
+      delete closingSurfaceTimers.current[name];
+      setClosingSurfaces((current) => ({ ...current, [name]: false }));
+    }, SURFACE_EXIT_MS);
+
+    closingSurfaceTimers.current[name] = timerId;
+  }
+
+  function isSurfaceRendered(name: SurfaceName, isOpen: boolean) {
+    return isOpen || closingSurfaces[name] === true;
+  }
+
+  function getSurfaceState(name: SurfaceName) {
+    return closingSurfaces[name] ? 'closing' : 'open';
+  }
 
   function resetRunState() {
     setElapsedSeconds(0);
@@ -228,7 +317,10 @@ export function App({ createInitialGame = createGame }: AppProps) {
     setIsComplete(false);
     setCompletedScore(null);
     setIsCompletionSheetOpen(false);
+    setClosingSurfaces((current) => ({ ...current, completion: false }));
+    setIsHintVisible(false);
     setDragVisual(null);
+    clearHintHold();
     timerStartedAt.current = null;
     dragState.current = null;
     suppressNextClick.current = false;
@@ -287,7 +379,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
   }
 
   function handleTileMove(tile: number) {
-    if (isComplete || adventureStatus === 'failed') {
+    if (boardIntroMode || isComplete || adventureStatus === 'failed') {
       return;
     }
 
@@ -307,21 +399,27 @@ export function App({ createInitialGame = createGame }: AppProps) {
 
     setPuzzle(createInitialGame(gridSize));
     resetRunState();
+    setAppScreen('game');
     setGameMode('classic');
     setAdventureLevel(null);
     setAdventureStatus('idle');
-    setIsDifficultyOpen(false);
     setThemeMessage('');
   }
 
   function changeDifficulty(nextGridSize: GridSize) {
+    const shouldPlayClassicIntro = appScreen === 'menu';
+
     window.localStorage.setItem(STORAGE_KEY, String(nextGridSize));
     setGridSize(nextGridSize);
     setPuzzle(createInitialGame(nextGridSize));
     resetRunState();
+    setAppScreen('game');
     setGameMode('classic');
     setAdventureLevel(null);
     setAdventureStatus('idle');
+    if (shouldPlayClassicIntro) {
+      startBoardIntro('classic');
+    }
     setIsDifficultyOpen(false);
     setThemeMessage('');
   }
@@ -332,11 +430,12 @@ export function App({ createInitialGame = createGame }: AppProps) {
     setGridSize(level.gridSize);
     setPuzzle(nextGame);
     resetRunState();
+    startBoardIntro('adventure');
+    setAppScreen('game');
     setGameMode('adventure');
     setAdventureLevel(level);
-    setPreviewLevel(null);
     setAdventureStatus('playing');
-    setIsAdventureOpen(false);
+    closeSurface('adventure', setIsAdventureOpen);
     setThemeMessage('');
   }
 
@@ -358,9 +457,19 @@ export function App({ createInitialGame = createGame }: AppProps) {
   function returnToClassic() {
     setPuzzle(createInitialGame(gridSize));
     resetRunState();
+    setAppScreen('game');
     setGameMode('classic');
     setAdventureLevel(null);
     setAdventureStatus('idle');
+  }
+
+  function returnToMenu() {
+    clearHintHold();
+    setIsHintVisible(false);
+    setDragVisual(null);
+    dragState.current = null;
+    setIsCompletionSheetOpen(false);
+    setAppScreen('menu');
   }
 
   function handleThemeSelect(themeId: ThemeId) {
@@ -380,9 +489,79 @@ export function App({ createInitialGame = createGame }: AppProps) {
     setThemeMessage(`${theme.name} selected.`);
   }
 
-  function handlePointerDown(event: PointerEvent<HTMLButtonElement>, tile: number) {
-    if (isComplete || adventureStatus === 'failed') {
+  function clearHintHold() {
+    if (hintHoldState.current) {
+      window.clearTimeout(hintHoldState.current.timeoutId);
+      hintHoldState.current = null;
+    }
+  }
+
+  function startHintHold(pointerId: number, startX: number, startY: number) {
+    if (!isAdventure || isComplete || adventureStatus !== 'playing') {
       return;
+    }
+
+    clearHintHold();
+    hintHoldState.current = {
+      hintShown: false,
+      pointerId,
+      startX,
+      startY,
+      timeoutId: window.setTimeout(() => {
+        if (hintHoldState.current?.pointerId !== pointerId) {
+          return;
+        }
+
+        hintHoldState.current.hintShown = true;
+        suppressNextClick.current = true;
+        setDragVisual(null);
+        setIsHintVisible(true);
+      }, HINT_HOLD_MS),
+    };
+  }
+
+  function updateHintHold(pointerId: number, clientX: number, clientY: number) {
+    const currentHint = hintHoldState.current;
+
+    if (!currentHint || currentHint.pointerId !== pointerId || currentHint.hintShown) {
+      return;
+    }
+
+    if (Math.max(Math.abs(clientX - currentHint.startX), Math.abs(clientY - currentHint.startY)) > CLICK_SLOP) {
+      clearHintHold();
+    }
+  }
+
+  function finishHintHold(pointerId: number): boolean {
+    const currentHint = hintHoldState.current;
+
+    if (!currentHint || currentHint.pointerId !== pointerId) {
+      return false;
+    }
+
+    const wasShown = currentHint.hintShown;
+
+    window.clearTimeout(currentHint.timeoutId);
+    hintHoldState.current = null;
+
+    if (wasShown) {
+      setIsHintVisible(false);
+      suppressNextClick.current = true;
+    }
+
+    return wasShown;
+  }
+
+  function handlePointerDown(event: PointerEvent<HTMLButtonElement>, tile: number) {
+    if (boardIntroMode || isComplete || adventureStatus === 'failed') {
+      return;
+    }
+
+    startHintHold(event.pointerId, event.clientX, event.clientY);
+
+    if (isAdventure) {
+      event.preventDefault();
+      event.currentTarget.setPointerCapture?.(event.pointerId);
     }
 
     const tileIndex = board.indexOf(tile);
@@ -427,6 +606,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
     if (getDragDistance(currentDrag, clientX, clientY) > CLICK_SLOP) {
       currentDrag.hasMoved = true;
       suppressNextClick.current = true;
+      clearHintHold();
     }
 
     if (Math.abs(offset) > Math.abs(currentDrag.followerOffset)) {
@@ -464,11 +644,11 @@ export function App({ createInitialGame = createGame }: AppProps) {
 
     currentDrag.offset = finalOffset;
     currentDrag.hasMoved = currentDrag.hasMoved || traveled > CLICK_SLOP;
-    suppressNextClick.current = currentDrag.hasMoved;
+    suppressNextClick.current = currentDrag.hasMoved || (hintHoldState.current?.hintShown ?? false);
     dragState.current = null;
     setDragVisual(null);
 
-    if (shouldCommit) {
+    if (shouldCommit && !hintHoldState.current?.hintShown) {
       const nextBoard = getBoardAfterDrag(currentDrag, draggedTileAdvanced);
 
       if (nextBoard !== currentDrag.board) {
@@ -481,11 +661,26 @@ export function App({ createInitialGame = createGame }: AppProps) {
 
   return (
     <main className="app-shell" data-theme={selectedThemeId}>
-      <section className="game" aria-label="15 Puzzle game">
+      {appScreen === 'menu' ? (
+        <section className="main-menu" aria-label="Main menu">
+          <p className="eyebrow">Sliding picture puzzle</p>
+          <h1>Magic Box</h1>
+          <div className="main-menu__actions">
+            <button type="button" onClick={() => openSurface('difficulty', setIsDifficultyOpen)}>New Game</button>
+            {canContinueGame && (
+              <button type="button" onClick={() => setAppScreen('game')}>Continue Game</button>
+            )}
+            <button type="button" onClick={() => openSurface('adventure', setIsAdventureOpen)}>Adventure Mode</button>
+            <button type="button" onClick={() => openSurface('theme', setIsThemeOpen)}>Themes</button>
+            <button type="button" onClick={() => openSurface('leaderboard', setIsLeaderboardOpen)}>Leaderboard</button>
+          </div>
+        </section>
+      ) : (
+      <section className="game" aria-label="Magic Box game">
         <header className="game__header">
           <div>
             <p className="eyebrow">{isAdventure ? 'Adventure Puzzle' : 'Classic 15 Puzzle'}</p>
-            <h1>Slide the grid home</h1>
+            <h1>Magic Box</h1>
           </div>
           <div className="stats" aria-label="Game stats">
             <time className="stat" aria-label="Elapsed time">
@@ -509,14 +704,14 @@ export function App({ createInitialGame = createGame }: AppProps) {
 
         <div
           ref={boardRef}
-          className="board"
+          className={`board${boardIntroMode ? ' board--drive-in' : hasSettledBoardIntro ? ' board--intro-settled' : ''}`}
           style={{ '--grid-size': gridSize } as CSSProperties}
         >
           {solvedBoard.filter((tile): tile is number => tile !== null).map((tile) => {
             const index = tilePositions.get(tile) ?? 0;
             const row = Math.floor(index / gridSize);
             const col = index % gridSize;
-            const movable = canSlide(board, index, gridSize);
+            const movable = !boardIntroMode && canSlide(board, board.indexOf(tile), gridSize);
             const dragOffset = dragVisual?.offsets.get(index) ?? 0;
             const isDragging = dragVisual?.offsets.has(index) ?? false;
             const xOffset = dragVisual?.axis === 'x' ? dragOffset : 0;
@@ -554,34 +749,42 @@ export function App({ createInitialGame = createGame }: AppProps) {
           })}
         </div>
 
-        <p className="status" aria-live="polite">
+        <p className={`status${isAdventure && !hasStarted && !isComplete && adventureStatus === 'playing' ? ' status--adventure-hint' : ''}`} aria-live="polite">
           {adventureStatus === 'failed'
             ? 'No moves left. Try the level again.'
             : isComplete
               ? 'Solved. Beautifully done.'
               : hasStarted
                 ? 'Timer running'
-                : 'Timer starts on your first move'}
+                : isAdventure
+                  ? 'Press and hold any tile to preview the solution.'
+                  : 'Timer starts on your first move'}
         </p>
 
         <div className="actions">
-          <button type="button" onClick={() => setIsDifficultyOpen(true)}>Difficulty</button>
-          <button type="button" onClick={() => setIsThemeOpen(true)}>Themes</button>
-          {isAdventure ? (
-            <button type="button" onClick={returnToClassic}>Classic</button>
-          ) : (
-            <button type="button" onClick={() => setIsLeaderboardOpen(true)}>Leaderboard</button>
-          )}
-          <button type="button" onClick={() => setIsAdventureOpen(true)}>Adventure</button>
+          <button type="button" onClick={returnToMenu}>Main Menu</button>
+          <button type="button" onClick={() => openSurface('difficulty', setIsDifficultyOpen)}>Difficulty</button>
           <button type="button" onClick={newGame}>{isAdventure ? 'Retry level' : 'New game'}</button>
         </div>
       </section>
+      )}
 
-      {isDifficultyOpen && (
+      {isAdventure && (
+        <div
+          className="adventure-hint"
+          data-visible={isHintVisible}
+          aria-hidden={!isHintVisible}
+        >
+          <img src={adventureLevel.imageSrc} alt="" />
+        </div>
+      )}
+
+      {isSurfaceRendered('difficulty', isDifficultyOpen) && (
         <div
           className="modal-backdrop modal-backdrop--blur"
+          data-state={getSurfaceState('difficulty')}
           role="presentation"
-          onClick={() => setIsDifficultyOpen(false)}
+          onClick={() => closeSurface('difficulty', setIsDifficultyOpen)}
         >
           <section
             className="modal-panel difficulty-panel"
@@ -593,7 +796,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
             <button
               className="modal-close"
               type="button"
-              onClick={() => setIsDifficultyOpen(false)}
+              onClick={() => closeSurface('difficulty', setIsDifficultyOpen)}
               aria-label="Close difficulty"
             >
               Close
@@ -621,11 +824,12 @@ export function App({ createInitialGame = createGame }: AppProps) {
         </div>
       )}
 
-      {isThemeOpen && (
+      {isSurfaceRendered('theme', isThemeOpen) && (
         <div
           className="modal-backdrop modal-backdrop--blur"
+          data-state={getSurfaceState('theme')}
           role="presentation"
-          onClick={() => setIsThemeOpen(false)}
+          onClick={() => closeSurface('theme', setIsThemeOpen)}
         >
           <section
             className="modal-panel theme-panel"
@@ -637,7 +841,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
             <button
               className="modal-close"
               type="button"
-              onClick={() => setIsThemeOpen(false)}
+              onClick={() => closeSurface('theme', setIsThemeOpen)}
               aria-label="Close themes"
             >
               Close
@@ -679,11 +883,12 @@ export function App({ createInitialGame = createGame }: AppProps) {
         </div>
       )}
 
-      {isLeaderboardOpen && (
+      {isSurfaceRendered('leaderboard', isLeaderboardOpen) && (
         <div
           className="modal-backdrop"
+          data-state={getSurfaceState('leaderboard')}
           role="presentation"
-          onClick={() => setIsLeaderboardOpen(false)}
+          onClick={() => closeSurface('leaderboard', setIsLeaderboardOpen)}
         >
           <section
             className="modal-panel"
@@ -695,7 +900,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
             <button
               className="modal-close"
               type="button"
-              onClick={() => setIsLeaderboardOpen(false)}
+              onClick={() => closeSurface('leaderboard', setIsLeaderboardOpen)}
               aria-label="Close leaderboard"
             >
               Close
@@ -705,11 +910,12 @@ export function App({ createInitialGame = createGame }: AppProps) {
         </div>
       )}
 
-      {isAdventureOpen && (
+      {isSurfaceRendered('adventure', isAdventureOpen) && (
         <div
           className="modal-backdrop modal-backdrop--blur"
+          data-state={getSurfaceState('adventure')}
           role="presentation"
-          onClick={() => setIsAdventureOpen(false)}
+          onClick={() => closeSurface('adventure', setIsAdventureOpen)}
         >
           <section
             className="modal-panel adventure-panel"
@@ -721,64 +927,64 @@ export function App({ createInitialGame = createGame }: AppProps) {
             <button
               className="modal-close"
               type="button"
-              onClick={() => setIsAdventureOpen(false)}
+              onClick={() => closeSurface('adventure', setIsAdventureOpen)}
               aria-label="Close adventure"
             >
               Close
             </button>
             <h2>Adventure</h2>
-            {previewLevel ? (
-              <div className="level-preview">
-                <img src={previewLevel.imageSrc} alt="" />
-                <div>
-                  <p className="eyebrow">Preview</p>
-                  <h3>{previewLevel.title}</h3>
-                  <p>{previewLevel.gridSize}x{previewLevel.gridSize} · {previewLevel.maxMoves} moves max</p>
-                </div>
-                <button type="button" onClick={() => startAdventureLevel(previewLevel)}>
-                  Start
-                </button>
-                <button type="button" onClick={() => setPreviewLevel(null)}>
-                  Back to levels
-                </button>
-              </div>
-            ) : (
-              <div className="level-list">
-                {ADVENTURE_LEVELS.map((level, index) => {
-                  const isUnlocked = isAdventureLevelUnlocked(level.id, adventureProgress);
-                  const isCompleted = adventureProgress.completedLevelIds.includes(level.id);
-                  const best = adventureProgress.bestByLevel[level.id];
+            <p className="adventure-panel__hint">Hold a tile during a level to reveal the full image.</p>
+            <div className="level-list">
+              {ADVENTURE_LEVELS.map((level, index) => {
+                const isUnlocked = isAdventureLevelUnlocked(level.id, adventureProgress);
+                const isCompleted = adventureProgress.completedLevelIds.includes(level.id);
+                const best = adventureProgress.bestByLevel[level.id];
+                const unlockRequirement = index === 0 ? 'Unlocked' : `Complete Level ${index} to unlock`;
 
-                  return (
-                    <button
-                      className="level-card"
-                      data-locked={!isUnlocked}
-                      disabled={!isUnlocked}
-                      key={level.id}
-                      type="button"
-                      onClick={() => setPreviewLevel(level)}
-                    >
-                      <img src={level.imageSrc} alt="" />
-                      <span>
-                        <small>Level {index + 1}</small>
-                        <strong>{level.title}</strong>
-                        <em>
-                          {level.gridSize}x{level.gridSize} · {level.maxMoves} moves
-                          {best ? ` · best ${formatTime(best.timeInSeconds)}` : ''}
-                        </em>
-                      </span>
-                      <b>{isCompleted ? 'Done' : isUnlocked ? 'Play' : 'Locked'}</b>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+                return (
+                  <button
+                    className="level-card"
+                    data-locked={!isUnlocked}
+                    disabled={!isUnlocked}
+                    key={level.id}
+                    type="button"
+                    aria-label={isUnlocked ? level.title : `Locked level ${index + 1}. ${unlockRequirement}`}
+                    onClick={() => startAdventureLevel(level)}
+                  >
+                    {isUnlocked ? (
+                      <>
+                        <img src={level.imageSrc} alt="" />
+                        <span>
+                          <small>Level {index + 1}</small>
+                          <strong>{level.title}</strong>
+                          <em>
+                            {level.gridSize}x{level.gridSize} · {level.maxMoves} moves
+                            {best ? ` · best ${formatTime(best.timeInSeconds)}` : ''}
+                          </em>
+                        </span>
+                        <b>{isCompleted ? 'Done' : 'Play'}</b>
+                      </>
+                    ) : (
+                      <>
+                        <span className="level-card__obscured" aria-hidden="true" />
+                        <span>
+                          <small>Level {index + 1}</small>
+                          <strong>Locked level</strong>
+                          <em>{unlockRequirement}</em>
+                        </span>
+                        <b>Locked</b>
+                      </>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </section>
         </div>
       )}
 
-      {isCompletionSheetOpen && completedScore && (
-        <div className="completion-backdrop" role="presentation">
+      {isSurfaceRendered('completion', isCompletionSheetOpen) && completedScore && (
+        <div className="completion-backdrop" data-state={getSurfaceState('completion')} role="presentation">
           <section
             className="completion-sheet"
             role="dialog"
@@ -788,7 +994,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
             <button
               className="modal-close"
               type="button"
-              onClick={() => setIsCompletionSheetOpen(false)}
+              onClick={() => closeSurface('completion', setIsCompletionSheetOpen)}
               aria-label="Close completion panel"
             >
               Close
@@ -803,8 +1009,8 @@ export function App({ createInitialGame = createGame }: AppProps) {
         </div>
       )}
 
-      {isCompletionSheetOpen && isAdventure && (
-        <div className="completion-backdrop" role="presentation">
+      {isSurfaceRendered('completion', isCompletionSheetOpen) && isAdventure && (
+        <div className="completion-backdrop" data-state={getSurfaceState('completion')} role="presentation">
           <section
             className="completion-sheet adventure-completion"
             role="dialog"
@@ -814,7 +1020,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
             <button
               className="modal-close"
               type="button"
-              onClick={() => setIsCompletionSheetOpen(false)}
+              onClick={() => closeSurface('completion', setIsCompletionSheetOpen)}
               aria-label="Close adventure result"
             >
               Close
@@ -832,9 +1038,8 @@ export function App({ createInitialGame = createGame }: AppProps) {
               <button
                 type="button"
                 onClick={() => {
-                  setIsCompletionSheetOpen(false);
-                  setPreviewLevel(null);
-                  setIsAdventureOpen(true);
+                  closeSurface('completion', setIsCompletionSheetOpen);
+                  openSurface('adventure', setIsAdventureOpen);
                 }}
               >
                 Levels

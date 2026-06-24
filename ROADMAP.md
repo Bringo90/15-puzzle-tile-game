@@ -1,18 +1,20 @@
-# 15 Tiles Game Roadmap and Backlog
+# Magic Box Roadmap and Backlog
 
 This document summarizes the game development completed so far and keeps a lightweight backlog for future improvements.
 
 ## Current Product
 
-15 Tiles Game is a mobile-first sliding puzzle built with Vite, React, and TypeScript. It supports multiple board sizes, physical-feeling drag interactions, elapsed-time scoring, move counting, Supabase-backed leaderboards, and a polished physical-tray visual style.
+Magic Box is a mobile-first sliding puzzle built with Vite, React, and TypeScript. It supports classic numbered puzzles, curated image-based Adventure levels, multiple board sizes, physical-feeling drag interactions, elapsed-time scoring, move counting, Supabase-backed leaderboards, app-wide themes, and a polished physical-tray visual style.
 
 The current player experience is:
 
-1. Choose a difficulty.
-2. Solve a scrambled sliding puzzle.
-3. Track elapsed time and moves.
-4. Submit a score if the completion time qualifies for the current difficulty leaderboard.
-5. View the top 10 leaderboard for the selected difficulty.
+1. Start from the Main Menu.
+2. Choose Classic New Game, Adventure Mode, Themes, or Leaderboard.
+3. In Classic mode, choose a difficulty and solve a scrambled numbered puzzle.
+4. In Adventure mode, choose an unlocked curated image level and solve it within the move limit.
+5. Track elapsed time and moves, or moves remaining in Adventure mode.
+6. Submit a Classic score if the completion time qualifies for the current difficulty leaderboard.
+7. View the top 10 leaderboard for the selected difficulty.
 
 ## Completed Roadmap
 
@@ -67,6 +69,7 @@ The current player experience is:
 - Made New Game use the selected difficulty.
 - Kept board rendering square and responsive for all sizes.
 - Added a Difficulty modal so players do not accidentally reset the current game by tapping a visible difficulty option.
+- Moved difficulty selection behind the Main Menu's New Game flow and an in-game Difficulty button.
 
 ### Leaderboard
 
@@ -96,6 +99,21 @@ The current player experience is:
 - Centered the board and used large touch targets.
 - Kept the game screen visually quiet, with leaderboard and difficulty choices behind modals.
 - Updated controls so Difficulty and Leaderboard sit on the first row, while New Game spans the full row below.
+- Added a dedicated Main Menu as the first screen.
+- Added Main Menu actions for New Game, Continue Game, Adventure Mode, Themes, and Leaderboard.
+- Simplified the in-game controls to Main Menu, Difficulty, and New Game or Retry Level.
+- Preserved the current run when returning to the Main Menu.
+- Added smoother modal enter/exit animations and smoother screen transitions.
+
+### Themes
+
+- Added a theme architecture based on pre-built, selectable themes rather than player-customized colors.
+- Added app-wide theme tokens for backgrounds, panels, controls, modals, board, tiles, overlays, accents, and typography.
+- Added Classic Wood as the default theme.
+- Added Night Mode as a second unlocked theme.
+- Made themes affect the whole app, including page background, title, buttons, stats, modals, leaderboard rows, completion sheets, board, and tiles.
+- Added locked theme states and local unlock progress.
+- Added a Themes modal reachable from the Main Menu.
 
 ### Visual Polish
 
@@ -113,12 +131,50 @@ The current player experience is:
   - Tile numbers use `Josefin Sans` at weight 600.
 - Added subtle CSS-only texture to the board rim and recessed surface.
 - Added an inline SVG noise texture to the tiles for a subtle material finish.
+- Iterated Night Mode colors so the board rim, recessed surface, tiles, and app background read clearly in a darker palette.
+- Replaced tile shadows with small borders for a cleaner, less muddy depth model.
+- Increased tile border thickness to improve definition.
+- Increased tile number size for better readability on phones.
+- Tuned mobile tile gaps to keep the board tighter and easier to read.
+- Added a blurrier layered board shadow for a more natural object-on-surface effect.
+- Increased the board rim thickness outside the board bounds so the tray feels more substantial without shrinking the play area.
+
+### Adventure Mode
+
+- Added a separate Classic and Adventure mode structure.
+- Added curated local Adventure level definitions with image source, grid size, shuffle length, and max move limit.
+- Added sequential local Adventure progression:
+  - Level 1 is unlocked by default.
+  - Solving a level unlocks the next level.
+  - Locked levels remain visible but obscure their image, title, difficulty, and move details.
+- Rendered Adventure tiles as slices of the level image while keeping numbered board values internally for movement and win detection.
+- Added responsive image-slice positioning so picture tiles align across grid sizes and tile gaps.
+- Added a move countdown for Adventure levels.
+- Added local Adventure completion progress and best results.
+- Added failure state when the move countdown reaches zero.
+- Kept Adventure scores local-only and separate from the Supabase Classic leaderboard.
+- Added a hold gesture in Adventure mode that shows the full solution image as a hint without spending a move.
+- Replaced the pre-move Adventure status text with a larger instruction explaining that players can press and hold a tile to preview the solution.
+- Removed the extra Adventure preview screen so tapping an unlocked level starts the level directly.
+- Added the same drive-in board entrance animation to Adventure levels, briefly showing the solved image before the scramble appears.
+
+### Motion
+
+- Added a Classic board entrance animation when starting a Classic game from the Main Menu:
+  - The solved board slides in from the right.
+  - It overshoots slightly left with a small counter-clockwise brake rotation.
+  - It settles into place before swapping to the real scrambled board.
+- Avoided replaying the Classic entrance when pressing in-game New Game.
+- Fixed a post-intro flash caused by the generic board entrance animation replaying during the solved-to-scrambled swap.
+- Reused the board entrance motion for Adventure mode.
+- Kept tile movement logic separate from the entrance animation layer.
 
 ### Testing and Quality
 
 - Added tests for puzzle generation, solvability, movement, win detection, and difficulty behavior.
 - Added interaction tests for drag behavior, multi-tile movement, modals, move counting, and board size changes.
 - Added leaderboard tests for fetching, filtering, qualifying, and submission behavior.
+- Added tests for Main Menu flow, theme selection, Adventure progression, Adventure hint behavior, and board entrance animation behavior.
 - Verified builds with `npm run build`.
 
 ## Current Architecture
@@ -126,8 +182,10 @@ The current player experience is:
 ### Frontend
 
 - `src/App.tsx`: main game state, board rendering, timer, move counter, modals, drag behavior, and completion flow.
+- `src/adventure.ts`: curated Adventure level definitions, image tile styling, Adventure scramble creation, and local progress helpers.
 - `src/puzzle.ts`: board generation, movement rules, slide groups, solvability checks, and difficulty configuration.
 - `src/Leaderboard.tsx`: leaderboard fetching, top-10 qualification, score submission, and score display.
+- `src/themes.ts`: theme definitions, preview values, local theme selection, and unlock progress helpers.
 - `src/styles.css`: responsive layout, board/tile styling, modals, completion sheet, and controls.
 
 ### Backend
@@ -138,6 +196,7 @@ The current player experience is:
 ### Testing
 
 - `src/puzzle.test.ts`: pure puzzle logic tests.
+- `src/adventure.test.ts`: Adventure level validity, image tile mapping, and local Adventure progression tests.
 - `src/App.test.tsx`: game UI and interaction tests.
 - `src/Leaderboard.test.tsx`: leaderboard UI and submission tests.
 
@@ -145,6 +204,7 @@ The current player experience is:
 
 ### High Priority
 
+- Decide the v1 Adventure level list, image assets, grid sizes, and move limits.
 - Add rate limiting or basic abuse protection for score submission.
 - Add stronger server-side validation for completed games if cheating becomes a concern.
 - Add loading and error polish for leaderboard modals on slow connections.
@@ -157,6 +217,18 @@ The current player experience is:
 - Add an undo button for the previous move.
 - Add optional sound and haptic feedback for tile movement and puzzle completion.
 - Add a visible best local time per difficulty using local storage.
+- Tune Adventure level move limits after playtesting.
+- Decide whether Adventure retry should restore the same original scramble or generate a fresh scramble.
+
+### Adventure Improvements
+
+- Add more curated image levels.
+- Create a consistent image art direction and asset pipeline.
+- Add a clearer level-complete unlock moment when the next level becomes available.
+- Add local Adventure level best-time and best-moves display in the level list.
+- Consider Adventure chapters or worlds once there are enough levels.
+- Consider achievements that unlock themes.
+- Add accessibility text for image puzzles that does not spoil the solution.
 
 ### Leaderboard Improvements
 
@@ -168,19 +240,23 @@ The current player experience is:
 
 ### Design Polish
 
-- Add small motion refinements for the completion sheet and modal transitions.
 - Re-check 5x5 typography and spacing across very small mobile screens after final visual styling settles.
 - Add a subtle solved-state board animation.
 - Improve empty leaderboard state copy and layout.
 - Continue tuning the physical board style based on usability testing.
 - Decide whether to keep Google Fonts as remote imports or self-host the final selected fonts.
 - Decide whether CSS/SVG textures are enough or whether final art-directed texture assets are worth adding.
+- Tune the Adventure hint instruction copy and placement after mobile playtesting.
+- Refine locked Adventure card styling so it feels mysterious but still readable.
+- Continue tuning board entrance motion timing if it feels too strong after repeated play.
 
 ### Technical Improvements
 
 - Split drag interaction helpers out of `App.tsx` if the file grows further.
+- Split Main Menu, Adventure level select, Theme picker, and board rendering into smaller components if `App.tsx` grows further.
 - Add API route tests for `api/scores.ts`.
 - Add Playwright coverage for mobile drag behavior in a real browser.
+- Add Playwright visual checks for board entrance motion and Adventure image tiles.
 - Add CI commands for `npm test` and `npm run build`.
 - Add a README with setup, development, deployment, Supabase, and Vercel instructions.
 
@@ -207,13 +283,15 @@ The current player experience is:
 
 ### Milestone 4: Visual Polish
 
-- Refine modal and completion animations.
+- Refine completion animations.
 - Add a solved-state celebration.
 - Tune the 5x5 board for the smallest supported mobile viewport.
 - Keep refining the board so it feels like the real physical version of the game.
-- Add themes
+- Continue developing app-wide themes.
 
-### Milestone 5: Add journey Mode
+### Milestone 5: Adventure Mode Expansion
 
-- Create puzzles which need to solve a picture instead of ordering a numerical sequence
-- Make at least 30 levels
+- Create more curated image puzzles instead of relying only on numerical sequence puzzles.
+- Make at least 30 levels.
+- Tune each level's grid size, scramble length, and move countdown.
+- Decide whether themes are unlocked through Adventure progress, achievements, or both.

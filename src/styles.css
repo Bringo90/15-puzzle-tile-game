@@ -32,6 +32,7 @@
   --tile-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.38 0 0 0 0 0.28 0 0 0 0 0.18 0 0 0 0.18 0'/%3E%3C/filter%3E%3Crect width='96' height='96' filter='url(%23n)' opacity='0.28'/%3E%3C/svg%3E");
   --tile-shadow: rgba(63, 43, 27, 0.2);
   --tile-gap: clamp(0.2rem, 0.78vw, 0.3rem);
+  --board-rim-width: calc(var(--tile-gap) * 2);
 }
 
 * {
@@ -46,6 +47,19 @@ body {
 
 button {
   font: inherit;
+}
+
+button {
+  transition:
+    transform 160ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease;
+}
+
+button:active {
+  transform: translateY(1px);
 }
 
 .app-shell {
@@ -122,12 +136,93 @@ button {
   width: min(100%, 31rem);
 }
 
+.game,
+.main-menu {
+  animation: screen-enter 520ms cubic-bezier(0.18, 0.88, 0.22, 1) both;
+  transform-origin: 50% 48%;
+}
+
+.main-menu {
+  width: min(100%, 31rem);
+  display: grid;
+  gap: 1rem;
+  padding: clamp(1rem, 4vw, 1.35rem);
+  border: 2px solid var(--panel-border);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, #fff 18%, transparent), transparent 42%),
+    color-mix(in srgb, var(--panel) 82%, transparent);
+  box-shadow:
+    0 18px 34px rgba(63, 43, 27, 0.16),
+    0 5px 12px rgba(63, 43, 27, 0.1);
+}
+
+.main-menu h1 {
+  max-width: none;
+}
+
+.main-menu__actions {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.main-menu__actions button {
+  min-height: 3.65rem;
+  border: 2px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 900;
+  text-align: left;
+  padding: 0 1rem;
+}
+
+.main-menu__actions button:first-child {
+  border-color: color-mix(in srgb, var(--accent) 78%, var(--ink));
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
 .game__header {
   display: flex;
   align-items: end;
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1rem;
+}
+
+.game__header,
+.adventure-banner,
+.board,
+.status,
+.actions {
+  animation: surface-item-enter 520ms cubic-bezier(0.18, 0.88, 0.22, 1) both;
+}
+
+.adventure-banner {
+  animation-delay: 45ms;
+}
+
+.board {
+  animation-delay: 80ms;
+}
+
+.board.board--drive-in {
+  animation: classic-board-drive-in 700ms cubic-bezier(0.2, 0.86, 0.2, 1) both;
+  transform-origin: bottom left;
+}
+
+.board.board--intro-settled {
+  animation: none;
+}
+
+.status {
+  animation-delay: 120ms;
+}
+
+.actions {
+  animation-delay: 150ms;
 }
 
 .eyebrow {
@@ -204,9 +299,9 @@ h1 {
     ),
     var(--board-rim);
   box-shadow:
-    0 0 0 var(--tile-gap) var(--board-rim),
-    4px 5px 0 var(--tile-gap) var(--board-rim-dark),
-    8px 12px 18px rgba(63, 43, 27, 0.16);
+    0 0 0 var(--board-rim-width) var(--board-rim),
+    0 18px 34px rgba(63, 43, 27, 0.18),
+    0 5px 12px rgba(63, 43, 27, 0.12);
   overflow: hidden;
   touch-action: none;
   user-select: none;
@@ -331,7 +426,7 @@ h1 {
 
 .actions {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.7rem;
   margin-top: 1rem;
 }
@@ -348,7 +443,6 @@ h1 {
 }
 
 .actions button:last-child {
-  grid-column: 1 / -1;
   border-color: color-mix(in srgb, var(--accent) 78%, var(--ink));
   background: var(--accent);
   color: var(--accent-ink);
@@ -361,6 +455,19 @@ h1 {
   font-weight: 700;
   margin: 0.85rem 0 0;
   text-align: center;
+}
+
+.status--adventure-hint {
+  min-height: auto;
+  margin-top: 1rem;
+  padding: 0.8rem 0.9rem;
+  border: 2px solid color-mix(in srgb, var(--accent) 38%, var(--panel-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  color: var(--ink);
+  font-size: clamp(1.02rem, 4.2vw, 1.18rem);
+  font-weight: 900;
+  line-height: 1.25;
 }
 
 .adventure-banner {
@@ -389,6 +496,38 @@ h1 {
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.adventure-hint {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  padding: clamp(1.25rem, 5vw, 2.25rem);
+  background: color-mix(in srgb, var(--overlay-strong) 82%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.985);
+  transition:
+    opacity 220ms ease,
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.adventure-hint[data-visible="true"] {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.adventure-hint img {
+  width: min(88vw, 28rem);
+  aspect-ratio: 1;
+  border: 2px solid var(--panel-border);
+  border-radius: 8px;
+  box-shadow:
+    0 22px 58px color-mix(in srgb, var(--tile-shadow) 80%, transparent),
+    0 6px 16px color-mix(in srgb, var(--tile-shadow) 46%, transparent);
+  object-fit: cover;
 }
 
 .leaderboard {
@@ -539,6 +678,23 @@ h1 {
   backdrop-filter: blur(7px);
 }
 
+.modal-backdrop[data-state="open"] {
+  animation: backdrop-enter 220ms ease both;
+}
+
+.modal-backdrop[data-state="closing"] {
+  pointer-events: none;
+  animation: backdrop-exit 220ms ease both;
+}
+
+.modal-backdrop[data-state="open"] .modal-panel {
+  animation: modal-enter 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.modal-backdrop[data-state="closing"] .modal-panel {
+  animation: modal-exit 200ms ease both;
+}
+
 .modal-panel,
 .completion-sheet {
   position: relative;
@@ -568,6 +724,14 @@ h1 {
   margin: 0 0 1rem;
 }
 
+.adventure-panel__hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.35;
+  margin: -0.35rem 0 1rem;
+}
+
 .level-list {
   display: grid;
   gap: 0.65rem;
@@ -593,7 +757,11 @@ h1 {
 }
 
 .level-card[data-locked="true"] {
-  opacity: 0.62;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--panel) 86%, transparent), color-mix(in srgb, var(--board-surface) 24%, var(--panel))),
+    var(--panel);
+  color: var(--muted);
+  opacity: 1;
 }
 
 .level-card img {
@@ -601,6 +769,22 @@ h1 {
   height: 4.25rem;
   border-radius: 6px;
   object-fit: cover;
+}
+
+.level-card__obscured {
+  width: 4.25rem;
+  height: 4.25rem;
+  display: block;
+  border: 2px solid var(--panel-border);
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      color-mix(in srgb, var(--muted) 14%, transparent) 0 6px,
+      transparent 6px 12px
+    ),
+    color-mix(in srgb, var(--control-bg) 70%, var(--board-surface));
+  box-shadow: inset 2px 2px 5px color-mix(in srgb, var(--tile-shadow) 30%, transparent);
 }
 
 .level-card span {
@@ -632,33 +816,6 @@ h1 {
   text-transform: uppercase;
 }
 
-.level-preview {
-  display: grid;
-  gap: 0.85rem;
-}
-
-.level-preview img {
-  width: 100%;
-  aspect-ratio: 1;
-  border: 2px solid var(--panel-border);
-  border-radius: 8px;
-  object-fit: cover;
-}
-
-.level-preview h3 {
-  color: var(--ink);
-  font-size: 1.35rem;
-  line-height: 1;
-  margin: 0;
-}
-
-.level-preview p {
-  color: var(--muted);
-  font-weight: 800;
-  margin: 0.35rem 0 0;
-}
-
-.level-preview button,
 .adventure-result-actions button {
   min-height: 2.9rem;
   border: 2px solid var(--control-border);
@@ -669,7 +826,6 @@ h1 {
   font-weight: 900;
 }
 
-.level-preview button:first-of-type,
 .adventure-result-actions button:first-child {
   border-color: color-mix(in srgb, var(--accent) 78%, var(--ink));
   background: var(--accent);
@@ -784,6 +940,14 @@ h1 {
   pointer-events: none;
 }
 
+.completion-backdrop[data-state="open"] {
+  animation: backdrop-enter 220ms ease both;
+}
+
+.completion-backdrop[data-state="closing"] {
+  animation: backdrop-exit 220ms ease both;
+}
+
 .completion-sheet {
   height: 75dvh;
   max-height: 44rem;
@@ -792,7 +956,15 @@ h1 {
   border-radius: 8px 8px 0 0;
   padding: 3.35rem 1rem 1rem;
   pointer-events: auto;
-  animation: sheet-enter 260ms ease-out;
+}
+
+.completion-backdrop[data-state="open"] .completion-sheet {
+  animation: sheet-enter 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.completion-backdrop[data-state="closing"] .completion-sheet {
+  animation: sheet-exit 220ms ease both;
+  pointer-events: none;
 }
 
 .modal-close {
@@ -828,11 +1000,125 @@ h1 {
 
 @keyframes sheet-enter {
   from {
-    transform: translateY(100%);
+    opacity: 0;
+    transform: translateY(18%);
   }
 
   to {
+    opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes sheet-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(16%);
+  }
+}
+
+@keyframes screen-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.965);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes surface-item-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes classic-board-drive-in {
+  0% {
+    opacity: 0.96;
+    transform: translateX(115vw) rotate(0deg);
+  }
+
+  62% {
+    opacity: 1;
+    transform: translateX(-18px) rotate(-2.6deg);
+  }
+
+  80% {
+    opacity: 1;
+    transform: translateX(6px) rotate(0.7deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0) rotate(0deg);
+  }
+}
+
+@keyframes backdrop-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes backdrop-exit {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.975);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes modal-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
   }
 }
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { App } from './App';
 import { ADVENTURE_LEVELS } from './adventure';
 import { Board, GridSize } from './puzzle';
@@ -18,8 +18,19 @@ const ONE_MOVE_FROM_SOLVED_BOARD: Board = [
   13, 14, null, 15,
 ];
 
-function renderWithBoard(board: Board = ROW_SLIDE_BOARD, gridSize: GridSize = 4) {
-  return render(
+const DIFFICULTY_LABELS: Record<GridSize, string> = {
+  3: 'Easy 3x3',
+  4: 'Medium 4x4',
+  5: 'Hard 5x5',
+};
+
+function renderWithBoard(
+  board: Board = ROW_SLIDE_BOARD,
+  gridSize: GridSize = 4,
+  startGame = true,
+  finishClassicIntro = true,
+) {
+  const result = render(
     <App
       createInitialGame={() => ({
         board: [...board],
@@ -28,6 +39,20 @@ function renderWithBoard(board: Board = ROW_SLIDE_BOARD, gridSize: GridSize = 4)
       })}
     />,
   );
+
+  if (startGame) {
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByRole('button', { name: 'New Game' }));
+    fireEvent.click(screen.getByRole('radio', { name: DIFFICULTY_LABELS[gridSize] }));
+
+    if (finishClassicIntro) {
+      act(() => {
+        vi.advanceTimersByTime(700);
+      });
+    }
+  }
+
+  return result;
 }
 
 function dragTile(label: string, endX: number) {
@@ -81,6 +106,18 @@ function startDragTilePath(label: string, clientXs: number[]) {
   };
 }
 
+function startFirstAdventureLevel(finishBoardIntro = true) {
+  vi.useFakeTimers();
+  fireEvent.click(screen.getByRole('button', { name: 'Adventure Mode' }));
+  fireEvent.click(screen.getByRole('button', { name: /Sunset Harbor/ }));
+
+  if (finishBoardIntro) {
+    act(() => {
+      vi.advanceTimersByTime(700);
+    });
+  }
+}
+
 describe('App drag interaction', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -105,8 +142,74 @@ describe('App drag interaction', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it('starts on the main menu instead of the board', () => {
+    renderWithBoard(ROW_SLIDE_BOARD, 4, false);
+
+    expect(screen.getByRole('heading', { name: 'Magic Box' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Adventure Mode' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Tile/ })).toBeNull();
+  });
+
+  it('opens difficulty first when starting a new game from the menu', () => {
+    renderWithBoard(ROW_SLIDE_BOARD, 4, false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Game' }));
+
+    expect(screen.getByRole('dialog', { name: 'Choose difficulty' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Medium 4x4' }));
+
+    expect(screen.getAllByRole('button', { name: /^Tile/ })).toHaveLength(15);
+  });
+
+  it('shows a solved classic intro before revealing the scrambled board', () => {
+    renderWithBoard(ROW_SLIDE_BOARD, 4, true, false);
+
+    expect(document.querySelector('.board')?.classList.contains('board--drive-in')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Tile 8' }).getAttribute('data-cell-index')).toBe('7');
+    expect(screen.getByLabelText('Elapsed time').textContent).toContain('00:00');
+    expect(screen.getByText('Timer starts on your first move')).toBeTruthy();
+
+    act(() => {
+      vi.advanceTimersByTime(700);
+    });
+
+    expect(document.querySelector('.board')?.classList.contains('board--drive-in')).toBe(false);
+    expect(document.querySelector('.board')?.classList.contains('board--intro-settled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Tile 8, movable' }).getAttribute('data-cell-index')).toBe('11');
+  });
+
+  it('replays the solved intro when starting another classic game from the menu', () => {
+    renderWithBoard(ROW_SLIDE_BOARD, 4, true, false);
+
+    act(() => {
+      vi.advanceTimersByTime(700);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Main Menu' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New Game' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Medium 4x4' }));
+
+    expect(document.querySelector('.board')?.classList.contains('board--drive-in')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Tile 8' }).getAttribute('data-cell-index')).toBe('7');
+  });
+
+  it('does not replay the solved intro on in-game classic new games', () => {
+    renderWithBoard(ROW_SLIDE_BOARD, 4, true, false);
+
+    act(() => {
+      vi.advanceTimersByTime(700);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'New game' }));
+
+    expect(document.querySelector('.board')?.classList.contains('board--drive-in')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Tile 8, movable' }).getAttribute('data-cell-index')).toBe('11');
   });
 
   it('does not commit a drag that ends before the halfway point', () => {
@@ -154,9 +257,9 @@ describe('App drag interaction', () => {
   });
 
   it('opens the leaderboard in a modal instead of showing it inline', () => {
-    const { container } = renderWithBoard();
+    const { container } = renderWithBoard(ROW_SLIDE_BOARD, 4, false);
 
-    expect(container.querySelector('.game > .leaderboard')).toBeNull();
+    expect(container.querySelector('.main-menu > .leaderboard')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Leaderboard' }));
 
@@ -185,6 +288,22 @@ describe('App drag interaction', () => {
     expect(screen.getByLabelText('Moves').textContent).toContain('0');
   });
 
+  it('returns to the main menu without resetting an active game', () => {
+    renderWithBoard();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tile 5, movable' }));
+    expect(screen.getByLabelText('Moves').textContent).toContain('1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Main Menu' }));
+
+    expect(screen.getByRole('button', { name: 'Adventure Mode' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Continue Game' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue Game' }));
+
+    expect(screen.getByLabelText('Moves').textContent).toContain('1');
+  });
+
   it('continues the move count when a drag follows a click move', () => {
     renderWithBoard();
 
@@ -197,6 +316,7 @@ describe('App drag interaction', () => {
   });
 
   it('opens difficulty choices in a modal without resetting the game', () => {
+    vi.useFakeTimers();
     renderWithBoard();
 
     fireEvent.click(screen.getByRole('button', { name: 'Tile 5, movable' }));
@@ -209,6 +329,10 @@ describe('App drag interaction', () => {
 
     fireEvent.click(screen.getByRole('presentation'));
 
+    act(() => {
+      vi.advanceTimersByTime(250);
+    });
+
     expect(screen.queryByRole('dialog', { name: 'Choose difficulty' })).toBeNull();
     expect(screen.getByLabelText('Moves').textContent).toContain('1');
   });
@@ -216,9 +340,7 @@ describe('App drag interaction', () => {
   it('changes board size when selecting a difficulty in the modal', () => {
     render(<App />);
 
-    expect(screen.getAllByRole('button', { name: /^Tile/ })).toHaveLength(15);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Difficulty' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New Game' }));
     fireEvent.click(screen.getByRole('radio', { name: 'Easy 3x3' }));
     expect(screen.getAllByRole('button', { name: /^Tile/ })).toHaveLength(8);
 
@@ -228,7 +350,7 @@ describe('App drag interaction', () => {
   });
 
   it('opens theme choices and applies an available theme', () => {
-    const { container } = renderWithBoard();
+    const { container } = renderWithBoard(ROW_SLIDE_BOARD, 4, false);
 
     expect(container.querySelector('.app-shell')?.getAttribute('data-theme')).toBe('classic-wood');
 
@@ -240,7 +362,7 @@ describe('App drag interaction', () => {
   });
 
   it('shows unlock requirements for locked themes', () => {
-    renderWithBoard();
+    renderWithBoard(ROW_SLIDE_BOARD, 4, false);
 
     fireEvent.click(screen.getByRole('button', { name: 'Themes' }));
     fireEvent.click(screen.getByRole('radio', { name: 'Forest Trail, locked' }));
@@ -256,39 +378,74 @@ describe('App drag interaction', () => {
     renderWithBoard(ONE_MOVE_FROM_SOLVED_BOARD);
 
     fireEvent.click(screen.getByRole('button', { name: 'Tile 15, movable' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close completion panel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Main Menu' }));
     fireEvent.click(screen.getByRole('button', { name: 'Themes' }));
 
     expect(screen.getByRole('radio', { name: 'Forest Trail' })).toBeTruthy();
   });
 
-  it('shows locked adventure levels and starts an unlocked image level from preview', () => {
-    renderWithBoard();
+  it('obscures locked adventure levels and starts an unlocked image level directly', () => {
+    renderWithBoard(ROW_SLIDE_BOARD, 4, false);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Adventure' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Adventure Mode' }));
 
     expect(screen.getByRole('dialog', { name: 'Adventure levels' })).toBeTruthy();
-    expect((screen.getByRole('button', { name: /Forest Cabin/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Hold a tile during a level to reveal the full image.')).toBeTruthy();
+    expect(screen.queryByText('Forest Cabin')).toBeNull();
+    expect((screen.getByRole('button', { name: /Locked level 2/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Complete Level 1 to unlock')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /Sunset Harbor/ }));
-    expect(screen.getByText('Preview')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
-
-    expect(screen.getByText('Sunset Harbor')).toBeTruthy();
+    expect(screen.getAllByText('Sunset Harbor').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('Moves').textContent).toContain(String(ADVENTURE_LEVELS[0].maxMoves));
     expect(screen.queryByText('1')).toBeNull();
+    expect(document.querySelector('.board')?.classList.contains('board--drive-in')).toBe(true);
   });
 
   it('decrements the adventure move countdown on committed moves', () => {
-    renderWithBoard();
+    renderWithBoard(ROW_SLIDE_BOARD, 4, false);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Adventure' }));
-    fireEvent.click(screen.getByRole('button', { name: /Sunset Harbor/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    startFirstAdventureLevel();
 
     const firstMovableTile = screen.getAllByRole('button', { name: /movable/ })[0];
     fireEvent.click(firstMovableTile);
 
     expect(screen.getByLabelText('Moves').textContent).toContain(String(ADVENTURE_LEVELS[0].maxMoves - 1));
+  });
+
+  it('shows the full adventure image on long hold without spending a move', () => {
+    vi.useFakeTimers();
+    renderWithBoard(ROW_SLIDE_BOARD, 4, false);
+
+    startFirstAdventureLevel();
+
+    const firstMovableTile = screen.getAllByRole('button', { name: /movable/ })[0];
+    const createPointerEvent = (type: string) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+
+      Object.defineProperties(event, {
+        clientX: { value: 0 },
+        clientY: { value: 0 },
+        pointerId: { value: 1 },
+      });
+
+      return event;
+    };
+
+    fireEvent(firstMovableTile, createPointerEvent('pointerdown'));
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(document.querySelector('.adventure-hint')?.getAttribute('data-visible')).toBe('true');
+
+    fireEvent(window, createPointerEvent('pointerup'));
+    fireEvent.click(firstMovableTile);
+
+    expect(document.querySelector('.adventure-hint')?.getAttribute('data-visible')).toBe('false');
+    expect(screen.getByLabelText('Moves').textContent).toContain(String(ADVENTURE_LEVELS[0].maxMoves));
   });
 });
