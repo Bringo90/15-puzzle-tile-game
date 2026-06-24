@@ -13,6 +13,18 @@ import {
   slideTiles,
 } from './puzzle';
 import { Leaderboard } from './Leaderboard';
+import {
+  THEMES,
+  ThemeId,
+  ThemeProgress,
+  getStoredThemeId,
+  getStoredThemeProgress,
+  getThemeUnlockMessage,
+  isThemeUnlocked,
+  saveThemeId,
+  saveThemeProgress,
+  updateThemeProgressForWin,
+} from './themes';
 
 const CLICK_SLOP = 6;
 
@@ -126,7 +138,11 @@ export function App({ createInitialGame = createGame }: AppProps) {
   const [dragVisual, setDragVisual] = useState<DragVisual>(null);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
   const [isDifficultyOpen, setIsDifficultyOpen] = useState(false);
+  const [isThemeOpen, setIsThemeOpen] = useState(false);
   const [isCompletionSheetOpen, setIsCompletionSheetOpen] = useState(false);
+  const [themeProgress, setThemeProgress] = useState<ThemeProgress>(getStoredThemeProgress);
+  const [selectedThemeId, setSelectedThemeId] = useState<ThemeId>(() => getStoredThemeId(themeProgress));
+  const [themeMessage, setThemeMessage] = useState('');
   const boardRef = useRef<HTMLDivElement>(null);
   const dragState = useRef<DragState | null>(null);
   const timerStartedAt = useRef<number | null>(null);
@@ -196,6 +212,10 @@ export function App({ createInitialGame = createGame }: AppProps) {
     setHasStarted(true);
 
     if (isSolved(nextBoard, gridSize)) {
+      const nextThemeProgress = updateThemeProgressForWin(themeProgress, gridSize);
+
+      saveThemeProgress(nextThemeProgress);
+      setThemeProgress(nextThemeProgress);
       setIsComplete(true);
       setHasStarted(false);
       setCompletedScore({
@@ -225,6 +245,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
     setCompletedScore(null);
     setIsCompletionSheetOpen(false);
     setIsDifficultyOpen(false);
+    setThemeMessage('');
     setDragVisual(null);
     timerStartedAt.current = null;
     dragState.current = null;
@@ -241,9 +262,27 @@ export function App({ createInitialGame = createGame }: AppProps) {
     setCompletedScore(null);
     setIsCompletionSheetOpen(false);
     setIsDifficultyOpen(false);
+    setThemeMessage('');
     setDragVisual(null);
     timerStartedAt.current = null;
     dragState.current = null;
+  }
+
+  function handleThemeSelect(themeId: ThemeId) {
+    const theme = THEMES.find((candidate) => candidate.id === themeId);
+
+    if (!theme) {
+      return;
+    }
+
+    if (!isThemeUnlocked(theme, themeProgress)) {
+      setThemeMessage(getThemeUnlockMessage(theme));
+      return;
+    }
+
+    saveThemeId(theme.id);
+    setSelectedThemeId(theme.id);
+    setThemeMessage(`${theme.name} selected.`);
   }
 
   function handlePointerDown(event: PointerEvent<HTMLButtonElement>, tile: number) {
@@ -342,7 +381,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-theme={selectedThemeId}>
       <section className="game" aria-label="15 Puzzle game">
         <header className="game__header">
           <div>
@@ -410,6 +449,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
 
         <div className="actions">
           <button type="button" onClick={() => setIsDifficultyOpen(true)}>Difficulty</button>
+          <button type="button" onClick={() => setIsThemeOpen(true)}>Themes</button>
           <button type="button" onClick={() => setIsLeaderboardOpen(true)}>Leaderboard</button>
           <button type="button" onClick={newGame}>New game</button>
         </div>
@@ -455,6 +495,64 @@ export function App({ createInitialGame = createGame }: AppProps) {
                 </button>
               ))}
             </div>
+          </section>
+        </div>
+      )}
+
+      {isThemeOpen && (
+        <div
+          className="modal-backdrop modal-backdrop--blur"
+          role="presentation"
+          onClick={() => setIsThemeOpen(false)}
+        >
+          <section
+            className="modal-panel theme-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Choose theme"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              className="modal-close"
+              type="button"
+              onClick={() => setIsThemeOpen(false)}
+              aria-label="Close themes"
+            >
+              Close
+            </button>
+            <h2>Themes</h2>
+            <div className="theme-options" role="radiogroup" aria-label="Themes">
+              {THEMES.map((theme) => {
+                const isUnlocked = isThemeUnlocked(theme, themeProgress);
+                const isSelected = selectedThemeId === theme.id;
+
+                return (
+                  <button
+                    className="theme-option"
+                    data-locked={!isUnlocked}
+                    data-selected={isSelected}
+                    key={theme.id}
+                    type="button"
+                    role="radio"
+                    aria-label={`${theme.name}${isUnlocked ? '' : ', locked'}`}
+                    aria-checked={isSelected}
+                    onClick={() => handleThemeSelect(theme.id)}
+                  >
+                    <span className="theme-option__preview" aria-hidden="true">
+                      <span style={{ background: theme.preview.rim }} />
+                      <span style={{ background: theme.preview.board }} />
+                      <span style={{ background: theme.preview.tile }} />
+                    </span>
+                    <span>
+                      <strong>{theme.name}</strong>
+                      <small>{theme.description}</small>
+                    </span>
+                    <em>{isUnlocked ? isSelected ? 'Selected' : 'Available' : 'Locked'}</em>
+                  </button>
+                );
+              })}
+            </div>
+            {themeMessage && <p className="theme-message" aria-live="polite">{themeMessage}</p>}
           </section>
         </div>
       )}

@@ -225,4 +225,38 @@ describe('App drag interaction', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Hard 5x5' }));
     expect(screen.getAllByRole('button', { name: /^Tile/ })).toHaveLength(24);
   });
+
+  it('opens theme choices and applies an available theme', () => {
+    const { container } = renderWithBoard();
+
+    expect(container.querySelector('.app-shell')?.getAttribute('data-theme')).toBe('classic-wood');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Themes' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Night Mode' }));
+
+    expect(container.querySelector('.app-shell')?.getAttribute('data-theme')).toBe('night-mode');
+    expect(screen.getByText('Night Mode selected.')).toBeTruthy();
+  });
+
+  it('shows unlock requirements for locked themes', () => {
+    renderWithBoard();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Themes' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Forest Trail, locked' }));
+
+    expect(screen.getByText('Complete 3 puzzles to unlock.')).toBeTruthy();
+  });
+
+  it('unlocks themes when completion progress meets the requirement', () => {
+    window.localStorage.setItem('15-puzzle-theme-progress', JSON.stringify({
+      completedByGrid: { 3: 0, 4: 2, 5: 0 },
+      completedGames: 2,
+    }));
+    renderWithBoard(ONE_MOVE_FROM_SOLVED_BOARD);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tile 15, movable' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Themes' }));
+
+    expect(screen.getByRole('radio', { name: 'Forest Trail' })).toBeTruthy();
+  });
 });

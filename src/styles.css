@@ -9,13 +9,26 @@
   -webkit-font-smoothing: antialiased;
   --ink: #2e241d;
   --muted: #766c61;
+  --app-bg: #f3efe3;
+  --app-bg-soft: rgba(255, 250, 240, 0.9);
   --paper: #fffaf0;
+  --panel: #fffaf0;
+  --panel-border: rgba(46, 36, 29, 0.14);
+  --control-bg: #fffaf0;
+  --control-border: rgba(46, 36, 29, 0.16);
+  --row-bg: rgba(255, 250, 240, 0.62);
+  --overlay: rgba(46, 36, 29, 0.28);
+  --overlay-strong: rgba(46, 36, 29, 0.34);
+  --accent: #f26f4c;
+  --accent-ink: #fffaf0;
   --board: #a78d6d;
   --board-rim: #725437;
   --board-rim-dark: #4d3523;
+  --rim-cast-shadow: rgba(45, 29, 18, 0.24);
   --board-surface: #9a8366;
   --tile: #e9dcc3;
-  --tile-hot: #f26f4c;
+  --tile-border: rgba(92, 65, 43, 0.22);
+  --tile-ink: var(--ink);
   --tile-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.38 0 0 0 0 0.28 0 0 0 0 0.18 0 0 0 0.18 0'/%3E%3C/filter%3E%3Crect width='96' height='96' filter='url(%23n)' opacity='0.28'/%3E%3C/svg%3E");
   --tile-shadow: rgba(63, 43, 27, 0.2);
   --tile-gap: clamp(0.24rem, 1vw, 0.36rem);
@@ -41,9 +54,68 @@ button {
   place-items: center;
   padding: clamp(1rem, 5vw, 3rem);
   background:
-    linear-gradient(135deg, rgba(242, 111, 76, 0.13), transparent 38%),
-    radial-gradient(circle at 50% 18%, rgba(255, 250, 240, 0.9), transparent 36%),
-    #f3efe3;
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 13%, transparent), transparent 38%),
+    radial-gradient(circle at 50% 18%, var(--app-bg-soft), transparent 36%),
+    var(--app-bg);
+}
+
+.app-shell[data-theme="night-mode"] {
+  --ink: #f4ead8;
+  --muted: #b9ac98;
+  --app-bg: #2b2926;
+  --app-bg-soft: rgba(91, 82, 72, 0.5);
+  --paper: #25231f;
+  --panel: #24221f;
+  --panel-border: rgba(244, 234, 216, 0.13);
+  --control-bg: #302c26;
+  --control-border: rgba(244, 234, 216, 0.16);
+  --row-bg: rgba(244, 234, 216, 0.08);
+  --overlay: rgba(10, 9, 8, 0.56);
+  --overlay-strong: rgba(10, 9, 8, 0.68);
+  --accent: #d99b5c;
+  --accent-ink: #211b15;
+  --board-rim: #efe2c6;
+  --board-rim-dark: #9f8e70;
+  --rim-cast-shadow: rgba(0, 0, 0, 0.24);
+  --board-surface: #b9a987;
+  --tile: #514942;
+  --tile-border: rgba(246, 234, 213, 0.18);
+  --tile-ink: #f6ead5;
+  --tile-shadow: rgba(0, 0, 0, 0.28);
+}
+
+.app-shell[data-theme="forest-trail"] {
+  --accent: #b56f3e;
+  --board-rim: #4f5a3f;
+  --board-rim-dark: #303826;
+  --rim-cast-shadow: rgba(23, 29, 17, 0.24);
+  --board-surface: #6f775d;
+  --tile: #e1d7b8;
+  --tile-border: rgba(48, 56, 38, 0.24);
+}
+
+.app-shell[data-theme="midnight-arcade"] {
+  --ink: #241f33;
+  --muted: #6e6683;
+  --app-bg: #eee9f8;
+  --app-bg-soft: rgba(250, 246, 255, 0.9);
+  --paper: #faf6ff;
+  --panel: #faf6ff;
+  --panel-border: rgba(36, 31, 51, 0.14);
+  --control-bg: #faf6ff;
+  --control-border: rgba(36, 31, 51, 0.16);
+  --row-bg: rgba(250, 246, 255, 0.7);
+  --overlay: rgba(36, 31, 51, 0.28);
+  --overlay-strong: rgba(36, 31, 51, 0.34);
+  --accent: #7e65e8;
+  --accent-ink: #fffaf0;
+  --board-rim: #27233f;
+  --board-rim-dark: #171426;
+  --rim-cast-shadow: rgba(24, 19, 38, 0.26);
+  --board-surface: #46425f;
+  --tile: #ece6ff;
+  --tile-border: rgba(39, 35, 63, 0.2);
+  --tile-shadow: rgba(24, 19, 38, 0.24);
 }
 
 .game {
@@ -68,7 +140,7 @@ button {
 }
 
 h1 {
-  color: #33251d;
+  color: var(--tile-ink);
   font-family: "Love Ya Like A Sister", Georgia, ui-serif, serif;
   font-size: clamp(2rem, 9vw, 4.15rem);
   font-weight: 600;
@@ -90,8 +162,8 @@ h1 {
   align-content: center;
   gap: 0.15rem;
   padding: 0.5rem 0.65rem;
-  border: 2px solid rgba(46, 36, 29, 0.18);
-  background: rgba(255, 250, 240, 0.7);
+  border: 2px solid var(--control-border);
+  background: color-mix(in srgb, var(--panel) 72%, transparent);
   color: var(--ink);
   text-align: center;
 }
@@ -117,7 +189,7 @@ h1 {
   aspect-ratio: 1;
   margin-inline: auto;
   padding: var(--tile-gap);
-  border: 0;
+  border: 2px solid var(--tile-border);
   border-radius: 8px;
   background:
     repeating-linear-gradient(
@@ -189,6 +261,7 @@ h1 {
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   mask-composite: exclude;
+  filter: drop-shadow(2px 2px 2px var(--rim-cast-shadow));
   pointer-events: none;
 }
 
@@ -200,18 +273,14 @@ h1 {
   height: calc((100% - (var(--tile-gap) * (var(--grid-size) + 1))) / var(--grid-size));
   display: grid;
   place-items: center;
-  border: 0;
+  border: 1px solid var(--tile-border);
   border-radius: 8px;
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.42), transparent 52%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.22), transparent 42%),
     var(--tile-noise),
     var(--tile);
   background-blend-mode: normal, multiply, normal;
-  box-shadow:
-    inset 1px 1px 0 rgba(255, 250, 240, 0.58),
-    inset -1px -1px 0 rgba(130, 97, 63, 0.14),
-    2px 3px 0 #b99f79;
-  color: var(--ink);
+  color: var(--tile-ink);
   cursor: pointer;
   font-family: "Josefin Sans", Avenir Next, Avenir, ui-sans-serif, system-ui, sans-serif;
   font-size: clamp(0.95rem, calc(28vw / var(--grid-size)), 3.1rem);
@@ -220,44 +289,38 @@ h1 {
   transition:
     transform 180ms ease,
     background-color 160ms ease,
-    box-shadow 160ms ease;
+    border-color 160ms ease;
   will-change: transform;
   z-index: 1;
 }
 
 .tile[data-dragging="true"] {
-  box-shadow:
-    inset 1px 1px 0 rgba(255, 250, 240, 0.5),
-    inset -1px -1px 0 rgba(130, 97, 63, 0.12),
-    1px 2px 0 #b99f79;
+  border-color: color-mix(in srgb, var(--tile-border) 72%, var(--tile-ink));
   transition: none;
   z-index: 2;
 }
 
 .tile:focus-visible {
-  outline: 4px solid var(--tile-hot);
+  outline: 4px solid var(--accent);
   outline-offset: 3px;
 }
 
 .tile:active {
-  box-shadow:
-    inset 1px 1px 0 rgba(255, 250, 240, 0.5),
-    inset -1px -1px 0 rgba(130, 97, 63, 0.12),
-    1px 2px 0 #b99f79;
+  border-color: color-mix(in srgb, var(--tile-border) 72%, var(--tile-ink));
 }
 
 .actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.7rem;
   margin-top: 1rem;
 }
 
 .actions button {
   min-height: 3.25rem;
-  border: 2px solid rgba(46, 36, 29, 0.16);
+  border: 2px solid var(--control-border);
   border-radius: 6px;
-  background: var(--paper);
+  background: var(--control-bg);
   color: var(--ink);
   cursor: pointer;
   font-weight: 800;
@@ -265,9 +328,9 @@ h1 {
 
 .actions button:last-child {
   grid-column: 1 / -1;
-  border-color: #d75232;
-  background: var(--tile-hot);
-  color: #fffaf0;
+  border-color: color-mix(in srgb, var(--accent) 78%, var(--ink));
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 .status {
@@ -282,7 +345,7 @@ h1 {
 .leaderboard {
   margin-top: 1.35rem;
   padding-top: 1rem;
-  border-top: 2px solid rgba(46, 36, 29, 0.12);
+  border-top: 2px solid var(--panel-border);
 }
 
 .modal-panel .leaderboard,
@@ -310,9 +373,9 @@ h1 {
 .leaderboard__header button,
 .score-form button {
   min-height: 2.4rem;
-  border: 2px solid rgba(46, 36, 29, 0.16);
+  border: 2px solid var(--control-border);
   border-radius: 6px;
-  background: var(--paper);
+  background: var(--control-bg);
   color: var(--ink);
   cursor: pointer;
   font-weight: 800;
@@ -347,9 +410,9 @@ h1 {
 .score-form input {
   min-width: 0;
   min-height: 2.7rem;
-  border: 2px solid rgba(46, 36, 29, 0.16);
+  border: 2px solid var(--control-border);
   border-radius: 6px;
-  background: rgba(255, 250, 240, 0.78);
+  background: color-mix(in srgb, var(--panel) 78%, transparent);
   color: var(--ink);
   font: inherit;
   font-weight: 800;
@@ -385,14 +448,14 @@ h1 {
   gap: 0.55rem;
   min-height: 2.65rem;
   border-radius: 6px;
-  background: rgba(255, 250, 240, 0.62);
+  background: var(--row-bg);
   color: var(--ink);
   font-weight: 800;
   padding: 0.35rem 0.55rem;
 }
 
 .score-row__rank {
-  color: var(--tile-hot);
+  color: var(--accent);
 }
 
 .score-row__name {
@@ -419,11 +482,11 @@ h1 {
   display: grid;
   place-items: center;
   padding: 1rem;
-  background: rgba(46, 36, 29, 0.28);
+  background: var(--overlay);
 }
 
 .modal-backdrop--blur {
-  background: rgba(46, 36, 29, 0.34);
+  background: var(--overlay-strong);
   backdrop-filter: blur(7px);
 }
 
@@ -431,11 +494,11 @@ h1 {
 .completion-sheet {
   position: relative;
   width: min(100%, 31rem);
-  border: 2px solid rgba(46, 36, 29, 0.14);
+  border: 2px solid var(--panel-border);
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.32), transparent 42%),
-    var(--paper);
-  box-shadow: 0 24px 65px rgba(63, 43, 27, 0.24);
+    linear-gradient(145deg, color-mix(in srgb, #fff 22%, transparent), transparent 42%),
+    var(--panel);
+  box-shadow: 0 24px 65px color-mix(in srgb, var(--tile-shadow) 90%, transparent);
 }
 
 .modal-panel {
@@ -445,7 +508,8 @@ h1 {
   padding: 3.35rem 1rem 1rem;
 }
 
-.difficulty-panel h2 {
+.difficulty-panel h2,
+.theme-panel h2 {
   color: var(--ink);
   font-family: Georgia, ui-serif, serif;
   font-size: 1.8rem;
@@ -453,53 +517,104 @@ h1 {
   margin: 0 0 1rem;
 }
 
-.difficulty-options {
+.difficulty-options,
+.theme-options {
   display: grid;
   gap: 0.65rem;
 }
 
-.difficulty-option {
+.difficulty-option,
+.theme-option {
   min-height: 4.8rem;
   display: grid;
-  grid-template-columns: 3.2rem minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.75rem;
-  border: 2px solid rgba(46, 36, 29, 0.14);
+  border: 2px solid var(--panel-border);
   border-radius: 6px;
-  background: rgba(255, 250, 240, 0.68);
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
   color: var(--ink);
   cursor: pointer;
   padding: 0.7rem 0.8rem;
   text-align: left;
 }
 
-.difficulty-option[data-selected="true"] {
-  border-color: #d75232;
-  background: rgba(242, 111, 76, 0.14);
+.difficulty-option {
+  grid-template-columns: 3.2rem minmax(0, 1fr) auto;
+}
+
+.theme-option {
+  grid-template-columns: 4.2rem minmax(0, 1fr) auto;
+}
+
+.difficulty-option[data-selected="true"],
+.theme-option[data-selected="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.theme-option[data-locked="true"] {
+  opacity: 0.72;
 }
 
 .difficulty-option span {
-  color: var(--tile-hot);
+  color: var(--accent);
   font-size: 0.85rem;
   font-weight: 900;
 }
 
-.difficulty-option strong {
+.difficulty-option strong,
+.theme-option strong {
+  display: block;
   font-size: 1rem;
   font-weight: 900;
 }
 
-.difficulty-option small {
+.difficulty-option small,
+.theme-option small {
   color: var(--muted);
+  display: block;
   font-size: 0.85rem;
   font-weight: 900;
+  margin-top: 0.15rem;
+}
+
+.theme-option em {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.theme-option__preview {
+  width: 3.8rem;
+  height: 2.5rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.18rem;
+  padding: 0.28rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+.theme-option__preview span {
+  min-width: 0;
+  border-radius: 3px;
+}
+
+.theme-message {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 800;
+  margin: 0.85rem 0 0;
+  text-align: center;
 }
 
 .completion-backdrop {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: linear-gradient(to top, rgba(46, 36, 29, 0.24), rgba(46, 36, 29, 0));
+  background: linear-gradient(to top, var(--overlay), transparent);
   pointer-events: none;
 }
 
@@ -519,9 +634,9 @@ h1 {
   top: 0.85rem;
   right: 0.85rem;
   min-height: 2.35rem;
-  border: 2px solid rgba(46, 36, 29, 0.16);
+  border: 2px solid var(--control-border);
   border-radius: 6px;
-  background: rgba(255, 250, 240, 0.84);
+  background: color-mix(in srgb, var(--control-bg) 86%, transparent);
   color: var(--ink);
   cursor: pointer;
   font-weight: 800;
@@ -540,7 +655,7 @@ h1 {
   display: grid;
   place-items: center;
   border-radius: 6px;
-  background: rgba(242, 111, 76, 0.12);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--ink);
   font-weight: 900;
 }
