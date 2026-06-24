@@ -189,7 +189,7 @@ h1 {
   aspect-ratio: 1;
   margin-inline: auto;
   padding: var(--tile-gap);
-  border: 2px solid var(--tile-border);
+  border: 0;
   border-radius: 8px;
   background:
     repeating-linear-gradient(
@@ -273,7 +273,7 @@ h1 {
   height: calc((100% - (var(--tile-gap) * (var(--grid-size) + 1))) / var(--grid-size));
   display: grid;
   place-items: center;
-  border: 1px solid var(--tile-border);
+  border: 2px solid var(--tile-border);
   border-radius: 8px;
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.22), transparent 42%),
@@ -294,6 +294,26 @@ h1 {
   z-index: 1;
 }
 
+.tile--image {
+  overflow: hidden;
+  background: var(--tile);
+  color: transparent;
+}
+
+.tile--image::before {
+  content: "";
+  position: absolute;
+  top: var(--tile-image-top);
+  left: var(--tile-image-left);
+  width: var(--tile-image-size);
+  height: var(--tile-image-size);
+  background-image: var(--tile-image);
+  background-position: 0 0;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  pointer-events: none;
+}
+
 .tile[data-dragging="true"] {
   border-color: color-mix(in srgb, var(--tile-border) 72%, var(--tile-ink));
   transition: none;
@@ -311,7 +331,7 @@ h1 {
 
 .actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.7rem;
   margin-top: 1rem;
 }
@@ -324,6 +344,7 @@ h1 {
   color: var(--ink);
   cursor: pointer;
   font-weight: 800;
+  padding: 0 0.35rem;
 }
 
 .actions button:last-child {
@@ -340,6 +361,34 @@ h1 {
   font-weight: 700;
   margin: 0.85rem 0 0;
   text-align: center;
+}
+
+.adventure-banner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  margin: -0.25rem 0 0.75rem;
+  padding: 0.55rem 0.65rem;
+  border: 2px solid var(--panel-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  color: var(--ink);
+}
+
+.adventure-banner span,
+.adventure-banner small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.adventure-banner strong {
+  overflow: hidden;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .leaderboard {
@@ -509,12 +558,129 @@ h1 {
 }
 
 .difficulty-panel h2,
-.theme-panel h2 {
+.theme-panel h2,
+.adventure-panel h2,
+.adventure-completion h2 {
   color: var(--ink);
   font-family: Georgia, ui-serif, serif;
   font-size: 1.8rem;
   line-height: 1;
   margin: 0 0 1rem;
+}
+
+.level-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.level-card {
+  min-height: 5.6rem;
+  display: grid;
+  grid-template-columns: 4.75rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  border: 2px solid var(--panel-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0.65rem;
+  text-align: left;
+}
+
+.level-card:disabled {
+  cursor: not-allowed;
+}
+
+.level-card[data-locked="true"] {
+  opacity: 0.62;
+}
+
+.level-card img {
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.level-card span {
+  min-width: 0;
+}
+
+.level-card small,
+.level-card em {
+  color: var(--muted);
+  display: block;
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.level-card strong {
+  display: block;
+  overflow: hidden;
+  font-size: 1rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.level-card b {
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.level-preview {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.level-preview img {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 2px solid var(--panel-border);
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.level-preview h3 {
+  color: var(--ink);
+  font-size: 1.35rem;
+  line-height: 1;
+  margin: 0;
+}
+
+.level-preview p {
+  color: var(--muted);
+  font-weight: 800;
+  margin: 0.35rem 0 0;
+}
+
+.level-preview button,
+.adventure-result-actions button {
+  min-height: 2.9rem;
+  border: 2px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.level-preview button:first-of-type,
+.adventure-result-actions button:first-child {
+  border-color: color-mix(in srgb, var(--accent) 78%, var(--ink));
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.adventure-result-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-top: 1rem;
 }
 
 .difficulty-options,

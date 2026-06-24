@@ -1,5 +1,16 @@
 import { CSSProperties, PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ADVENTURE_LEVELS,
+  AdventureLevel,
+  AdventureProgress,
+  createAdventureGame,
+  getImageTileStyle,
+  getStoredAdventureProgress,
+  isAdventureLevelUnlocked,
+  saveAdventureProgress,
+  updateAdventureProgressForWin,
+} from './adventure';
+import {
   Board,
   DEFAULT_GRID_SIZE,
   DIFFICULTIES,
@@ -54,6 +65,9 @@ type GameState = {
   gridSize: GridSize;
   initialBoard: Board;
 };
+
+type GameMode = 'classic' | 'adventure';
+type AdventureStatus = 'idle' | 'playing' | 'failed' | 'complete';
 
 type AppProps = {
   createInitialGame?: (gridSize?: GridSize) => GameState;
@@ -129,7 +143,7 @@ function getBoardAfterDrag(drag: DragState, draggedTileAdvanced: boolean): Board
 
 export function App({ createInitialGame = createGame }: AppProps) {
   const [gridSize, setGridSize] = useState<GridSize>(getStoredGridSize);
-  const [{ board }, setPuzzle] = useState(() => createInitialGame(gridSize));
+  const [{ board, initialBoard }, setPuzzle] = useState(() => createInitialGame(gridSize));
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
@@ -139,7 +153,13 @@ export function App({ createInitialGame = createGame }: AppProps) {
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
   const [isDifficultyOpen, setIsDifficultyOpen] = useState(false);
   const [isThemeOpen, setIsThemeOpen] = useState(false);
+  const [isAdventureOpen, setIsAdventureOpen] = useState(false);
   const [isCompletionSheetOpen, setIsCompletionSheetOpen] = useState(false);
+  const [gameMode, setGameMode] = useState<GameMode>('classic');
+  const [adventureProgress, setAdventureProgress] = useState<AdventureProgress>(getStoredAdventureProgress);
+  const [adventureLevel, setAdventureLevel] = useState<AdventureLevel | null>(null);
+  const [previewLevel, setPreviewLevel] = useState<AdventureLevel | null>(null);
+  const [adventureStatus, setAdventureStatus] = useState<AdventureStatus>('idle');
   const [themeProgress, setThemeProgress] = useState<ThemeProgress>(getStoredThemeProgress);
   const [selectedThemeId, setSelectedThemeId] = useState<ThemeId>(() => getStoredThemeId(themeProgress));
   const [themeMessage, setThemeMessage] = useState('');
@@ -198,6 +218,21 @@ export function App({ createInitialGame = createGame }: AppProps) {
   );
 
   const solvedBoard = useMemo(() => createSolvedBoard(gridSize), [gridSize]);
+  const isAdventure = gameMode === 'adventure' && adventureLevel !== null;
+  const movesRemaining = adventureLevel ? Math.max(0, adventureLevel.maxMoves - moves) : 0;
+
+  function resetRunState() {
+    setElapsedSeconds(0);
+    setMoves(0);
+    setHasStarted(false);
+    setIsComplete(false);
+    setCompletedScore(null);
+    setIsCompletionSheetOpen(false);
+    setDragVisual(null);
+    timerStartedAt.current = null;
+    dragState.current = null;
+    suppressNextClick.current = false;
+  }
 
   function applyBoard(nextBoard: Board) {
     const nextMoves = moves + 1;
@@ -212,6 +247,23 @@ export function App({ createInitialGame = createGame }: AppProps) {
     setHasStarted(true);
 
     if (isSolved(nextBoard, gridSize)) {
+      if (gameMode === 'adventure' && adventureLevel) {
+        const nextAdventureProgress = updateAdventureProgressForWin(
+          adventureProgress,
+          adventureLevel.id,
+          nextElapsedSeconds,
+          nextMoves,
+        );
+
+        saveAdventureProgress(nextAdventureProgress);
+        setAdventureProgress(nextAdventureProgress);
+        setAdventureStatus('complete');
+        setIsComplete(true);
+        setHasStarted(false);
+        setIsCompletionSheetOpen(true);
+        return;
+      }
+
       const nextThemeProgress = updateThemeProgressForWin(themeProgress, gridSize);
 
       saveThemeProgress(nextThemeProgress);
@@ -224,10 +276,21 @@ export function App({ createInitialGame = createGame }: AppProps) {
         gridSize,
       });
       setIsCompletionSheetOpen(true);
+      return;
+    }
+
+    if (gameMode === 'adventure' && adventureLevel && nextMoves >= adventureLevel.maxMoves) {
+      setAdventureStatus('failed');
+      setHasStarted(false);
+      setIsCompletionSheetOpen(true);
     }
   }
 
   function handleTileMove(tile: number) {
+    if (isComplete || adventureStatus === 'failed') {
+      return;
+    }
+
     const tileIndex = board.indexOf(tile);
     const nextBoard = slideTiles(board, tileIndex, gridSize);
 
@@ -237,35 +300,67 @@ export function App({ createInitialGame = createGame }: AppProps) {
   }
 
   function newGame() {
+    if (gameMode === 'adventure' && adventureLevel) {
+      startAdventureLevel(adventureLevel);
+      return;
+    }
+
     setPuzzle(createInitialGame(gridSize));
-    setElapsedSeconds(0);
-    setMoves(0);
-    setHasStarted(false);
-    setIsComplete(false);
-    setCompletedScore(null);
-    setIsCompletionSheetOpen(false);
+    resetRunState();
+    setGameMode('classic');
+    setAdventureLevel(null);
+    setAdventureStatus('idle');
     setIsDifficultyOpen(false);
     setThemeMessage('');
-    setDragVisual(null);
-    timerStartedAt.current = null;
-    dragState.current = null;
   }
 
   function changeDifficulty(nextGridSize: GridSize) {
     window.localStorage.setItem(STORAGE_KEY, String(nextGridSize));
     setGridSize(nextGridSize);
     setPuzzle(createInitialGame(nextGridSize));
-    setElapsedSeconds(0);
-    setMoves(0);
-    setHasStarted(false);
-    setIsComplete(false);
-    setCompletedScore(null);
-    setIsCompletionSheetOpen(false);
+    resetRunState();
+    setGameMode('classic');
+    setAdventureLevel(null);
+    setAdventureStatus('idle');
     setIsDifficultyOpen(false);
     setThemeMessage('');
-    setDragVisual(null);
-    timerStartedAt.current = null;
-    dragState.current = null;
+  }
+
+  function startAdventureLevel(level: AdventureLevel) {
+    const nextGame = createAdventureGame(level);
+
+    setGridSize(level.gridSize);
+    setPuzzle(nextGame);
+    resetRunState();
+    setGameMode('adventure');
+    setAdventureLevel(level);
+    setPreviewLevel(null);
+    setAdventureStatus('playing');
+    setIsAdventureOpen(false);
+    setThemeMessage('');
+  }
+
+  function restartAdventureLevel() {
+    if (!adventureLevel) {
+      return;
+    }
+
+    setGridSize(adventureLevel.gridSize);
+    setPuzzle({
+      board: [...initialBoard],
+      gridSize: adventureLevel.gridSize,
+      initialBoard: [...initialBoard],
+    });
+    resetRunState();
+    setAdventureStatus('playing');
+  }
+
+  function returnToClassic() {
+    setPuzzle(createInitialGame(gridSize));
+    resetRunState();
+    setGameMode('classic');
+    setAdventureLevel(null);
+    setAdventureStatus('idle');
   }
 
   function handleThemeSelect(themeId: ThemeId) {
@@ -286,6 +381,10 @@ export function App({ createInitialGame = createGame }: AppProps) {
   }
 
   function handlePointerDown(event: PointerEvent<HTMLButtonElement>, tile: number) {
+    if (isComplete || adventureStatus === 'failed') {
+      return;
+    }
+
     const tileIndex = board.indexOf(tile);
     const group = getSlideGroup(board, tileIndex, gridSize);
     const boardElement = boardRef.current;
@@ -385,7 +484,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
       <section className="game" aria-label="15 Puzzle game">
         <header className="game__header">
           <div>
-            <p className="eyebrow">Classic 15 Puzzle</p>
+            <p className="eyebrow">{isAdventure ? 'Adventure Puzzle' : 'Classic 15 Puzzle'}</p>
             <h1>Slide the grid home</h1>
           </div>
           <div className="stats" aria-label="Game stats">
@@ -394,11 +493,19 @@ export function App({ createInitialGame = createGame }: AppProps) {
               <strong>{formatTime(elapsedSeconds)}</strong>
             </time>
             <div className="stat" aria-label="Moves">
-              <span>Moves</span>
-              <strong>{moves}</strong>
+              <span>{isAdventure ? 'Left' : 'Moves'}</span>
+              <strong>{isAdventure ? movesRemaining : moves}</strong>
             </div>
           </div>
         </header>
+
+        {isAdventure && (
+          <div className="adventure-banner">
+            <span>Adventure</span>
+            <strong>{adventureLevel.title}</strong>
+            <small>{adventureLevel.gridSize}x{adventureLevel.gridSize} · {moves} used</small>
+          </div>
+        )}
 
         <div
           ref={boardRef}
@@ -414,16 +521,20 @@ export function App({ createInitialGame = createGame }: AppProps) {
             const isDragging = dragVisual?.offsets.has(index) ?? false;
             const xOffset = dragVisual?.axis === 'x' ? dragOffset : 0;
             const yOffset = dragVisual?.axis === 'y' ? dragOffset : 0;
+            const imageTileStyle = isAdventure
+              ? getImageTileStyle(tile, gridSize, adventureLevel.imageSrc)
+              : {};
 
             return (
               <button
-                className="tile"
+                className={`tile${isAdventure ? ' tile--image' : ''}`}
                 data-cell-index={index}
                 data-dragging={isDragging}
                 data-movable={movable}
                 key={tile}
                 type="button"
                 style={{
+                  ...imageTileStyle,
                   transform: `translate3d(calc(${col} * (100% + var(--tile-gap)) + ${xOffset}px), calc(${row} * (100% + var(--tile-gap)) + ${yOffset}px), 0)`,
                 }}
                 onClick={() => {
@@ -437,21 +548,32 @@ export function App({ createInitialGame = createGame }: AppProps) {
                 onPointerDown={(event) => handlePointerDown(event, tile)}
                 aria-label={`Tile ${tile}${movable ? ', movable' : ''}`}
               >
-                {tile}
+                {isAdventure ? null : tile}
               </button>
             );
           })}
         </div>
 
         <p className="status" aria-live="polite">
-          {isComplete ? 'Solved. Beautifully done.' : hasStarted ? 'Timer running' : 'Timer starts on your first move'}
+          {adventureStatus === 'failed'
+            ? 'No moves left. Try the level again.'
+            : isComplete
+              ? 'Solved. Beautifully done.'
+              : hasStarted
+                ? 'Timer running'
+                : 'Timer starts on your first move'}
         </p>
 
         <div className="actions">
           <button type="button" onClick={() => setIsDifficultyOpen(true)}>Difficulty</button>
           <button type="button" onClick={() => setIsThemeOpen(true)}>Themes</button>
-          <button type="button" onClick={() => setIsLeaderboardOpen(true)}>Leaderboard</button>
-          <button type="button" onClick={newGame}>New game</button>
+          {isAdventure ? (
+            <button type="button" onClick={returnToClassic}>Classic</button>
+          ) : (
+            <button type="button" onClick={() => setIsLeaderboardOpen(true)}>Leaderboard</button>
+          )}
+          <button type="button" onClick={() => setIsAdventureOpen(true)}>Adventure</button>
+          <button type="button" onClick={newGame}>{isAdventure ? 'Retry level' : 'New game'}</button>
         </div>
       </section>
 
@@ -583,6 +705,78 @@ export function App({ createInitialGame = createGame }: AppProps) {
         </div>
       )}
 
+      {isAdventureOpen && (
+        <div
+          className="modal-backdrop modal-backdrop--blur"
+          role="presentation"
+          onClick={() => setIsAdventureOpen(false)}
+        >
+          <section
+            className="modal-panel adventure-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Adventure levels"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              className="modal-close"
+              type="button"
+              onClick={() => setIsAdventureOpen(false)}
+              aria-label="Close adventure"
+            >
+              Close
+            </button>
+            <h2>Adventure</h2>
+            {previewLevel ? (
+              <div className="level-preview">
+                <img src={previewLevel.imageSrc} alt="" />
+                <div>
+                  <p className="eyebrow">Preview</p>
+                  <h3>{previewLevel.title}</h3>
+                  <p>{previewLevel.gridSize}x{previewLevel.gridSize} · {previewLevel.maxMoves} moves max</p>
+                </div>
+                <button type="button" onClick={() => startAdventureLevel(previewLevel)}>
+                  Start
+                </button>
+                <button type="button" onClick={() => setPreviewLevel(null)}>
+                  Back to levels
+                </button>
+              </div>
+            ) : (
+              <div className="level-list">
+                {ADVENTURE_LEVELS.map((level, index) => {
+                  const isUnlocked = isAdventureLevelUnlocked(level.id, adventureProgress);
+                  const isCompleted = adventureProgress.completedLevelIds.includes(level.id);
+                  const best = adventureProgress.bestByLevel[level.id];
+
+                  return (
+                    <button
+                      className="level-card"
+                      data-locked={!isUnlocked}
+                      disabled={!isUnlocked}
+                      key={level.id}
+                      type="button"
+                      onClick={() => setPreviewLevel(level)}
+                    >
+                      <img src={level.imageSrc} alt="" />
+                      <span>
+                        <small>Level {index + 1}</small>
+                        <strong>{level.title}</strong>
+                        <em>
+                          {level.gridSize}x{level.gridSize} · {level.maxMoves} moves
+                          {best ? ` · best ${formatTime(best.timeInSeconds)}` : ''}
+                        </em>
+                      </span>
+                      <b>{isCompleted ? 'Done' : isUnlocked ? 'Play' : 'Locked'}</b>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+
       {isCompletionSheetOpen && completedScore && (
         <div className="completion-backdrop" role="presentation">
           <section
@@ -605,6 +799,47 @@ export function App({ createInitialGame = createGame }: AppProps) {
               showSubmit
               title="Solved"
             />
+          </section>
+        </div>
+      )}
+
+      {isCompletionSheetOpen && isAdventure && (
+        <div className="completion-backdrop" role="presentation">
+          <section
+            className="completion-sheet adventure-completion"
+            role="dialog"
+            aria-modal="true"
+            aria-label={adventureStatus === 'failed' ? 'Level failed' : 'Level completed'}
+          >
+            <button
+              className="modal-close"
+              type="button"
+              onClick={() => setIsCompletionSheetOpen(false)}
+              aria-label="Close adventure result"
+            >
+              Close
+            </button>
+            <h2>{adventureStatus === 'failed' ? 'Out of moves' : 'Level complete'}</h2>
+            <p className="leaderboard__difficulty">
+              {adventureLevel.title} · {adventureLevel.gridSize}x{adventureLevel.gridSize}
+            </p>
+            <div className="completion-summary">
+              <span>Time {formatTime(elapsedSeconds)}</span>
+              <span>{moves} moves</span>
+            </div>
+            <div className="adventure-result-actions">
+              <button type="button" onClick={restartAdventureLevel}>Retry level</button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCompletionSheetOpen(false);
+                  setPreviewLevel(null);
+                  setIsAdventureOpen(true);
+                }}
+              >
+                Levels
+              </button>
+            </div>
           </section>
         </div>
       )}

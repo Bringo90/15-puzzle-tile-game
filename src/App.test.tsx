@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { App } from './App';
+import { ADVENTURE_LEVELS } from './adventure';
 import { Board, GridSize } from './puzzle';
 
 const ROW_SLIDE_BOARD: Board = [
@@ -258,5 +259,36 @@ describe('App drag interaction', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Themes' }));
 
     expect(screen.getByRole('radio', { name: 'Forest Trail' })).toBeTruthy();
+  });
+
+  it('shows locked adventure levels and starts an unlocked image level from preview', () => {
+    renderWithBoard();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Adventure' }));
+
+    expect(screen.getByRole('dialog', { name: 'Adventure levels' })).toBeTruthy();
+    expect((screen.getByRole('button', { name: /Forest Cabin/ }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: /Sunset Harbor/ }));
+    expect(screen.getByText('Preview')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+    expect(screen.getByText('Sunset Harbor')).toBeTruthy();
+    expect(screen.getByLabelText('Moves').textContent).toContain(String(ADVENTURE_LEVELS[0].maxMoves));
+    expect(screen.queryByText('1')).toBeNull();
+  });
+
+  it('decrements the adventure move countdown on committed moves', () => {
+    renderWithBoard();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Adventure' }));
+    fireEvent.click(screen.getByRole('button', { name: /Sunset Harbor/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+    const firstMovableTile = screen.getAllByRole('button', { name: /movable/ })[0];
+    fireEvent.click(firstMovableTile);
+
+    expect(screen.getByLabelText('Moves').textContent).toContain(String(ADVENTURE_LEVELS[0].maxMoves - 1));
   });
 });
