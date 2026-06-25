@@ -64,6 +64,7 @@ button:active {
 }
 
 .app-shell {
+  position: relative;
   min-height: 100vh;
   display: grid;
   place-items: center;
@@ -72,6 +73,10 @@ button:active {
     linear-gradient(135deg, color-mix(in srgb, var(--accent) 13%, transparent), transparent 38%),
     radial-gradient(circle at 50% 18%, var(--app-bg-soft), transparent 36%),
     var(--app-bg);
+}
+
+.app-shell[data-screen="menu"] {
+  overflow: hidden;
 }
 
 .app-shell[data-theme="night-mode"] {
@@ -150,9 +155,106 @@ button:active {
 
 .main-menu {
   width: min(100%, 31rem);
+  position: relative;
+  z-index: 2;
+  isolation: isolate;
+}
+
+.main-menu__background {
+  --mini-board-size: clamp(3rem, 11vw, 4.55rem);
+  --mini-board-gap: clamp(1.75rem, 6vw, 3.5rem);
+  position: fixed;
+  inset: 0 -18vw;
+  z-index: 1;
   display: grid;
-  gap: 1rem;
-  padding: clamp(1rem, 4vw, 1.35rem);
+  min-height: 100vh;
+  min-height: 100dvh;
+  align-content: space-evenly;
+  gap: clamp(1rem, 2.4vh, 1.9rem);
+  overflow: hidden;
+  opacity: 0.14;
+  pointer-events: none;
+}
+
+.app-shell[data-theme="night-mode"] .main-menu__background {
+  opacity: 0.1;
+}
+
+.main-menu__pattern-row {
+  display: flex;
+  width: max-content;
+  gap: var(--mini-board-gap);
+  will-change: transform;
+}
+
+.main-menu__pattern-row[data-direction="left"] {
+  animation: menu-pattern-left 86s linear infinite;
+}
+
+.main-menu__pattern-row[data-direction="right"] {
+  animation: menu-pattern-right 98s linear infinite;
+}
+
+.main-menu__mini-board {
+  --mini-tile-step: calc(var(--mini-board-size) * 0.17);
+  position: relative;
+  width: var(--mini-board-size);
+  aspect-ratio: 1;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: var(--board-rim);
+  box-shadow:
+    0 10px 18px color-mix(in srgb, var(--rim-cast-shadow) 46%, transparent),
+    inset 0 0 0 2px color-mix(in srgb, var(--board-rim-dark) 34%, transparent);
+  transform: rotate(-4deg);
+}
+
+.main-menu__pattern-row[data-direction="right"] .main-menu__mini-board {
+  transform: rotate(4deg);
+}
+
+.main-menu__mini-board::before {
+  content: "";
+  position: absolute;
+  inset: 13%;
+  border-radius: 4px;
+  background: var(--board-surface);
+  box-shadow: inset 2px 2px 4px color-mix(in srgb, var(--board-rim-dark) 30%, transparent);
+}
+
+.main-menu__mini-board::after {
+  content: "";
+  position: absolute;
+  top: 18%;
+  left: 18%;
+  width: 11.5%;
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: var(--tile);
+  box-shadow:
+    var(--mini-tile-step) 0 0 var(--tile),
+    calc(var(--mini-tile-step) * 2) 0 0 var(--tile),
+    calc(var(--mini-tile-step) * 3) 0 0 var(--tile),
+    0 var(--mini-tile-step) 0 var(--tile),
+    var(--mini-tile-step) var(--mini-tile-step) 0 var(--tile),
+    calc(var(--mini-tile-step) * 2) var(--mini-tile-step) 0 var(--tile),
+    calc(var(--mini-tile-step) * 3) var(--mini-tile-step) 0 var(--tile),
+    0 calc(var(--mini-tile-step) * 2) 0 var(--tile),
+    var(--mini-tile-step) calc(var(--mini-tile-step) * 2) 0 var(--tile),
+    calc(var(--mini-tile-step) * 2) calc(var(--mini-tile-step) * 2) 0 var(--tile),
+    calc(var(--mini-tile-step) * 3) calc(var(--mini-tile-step) * 2) 0 var(--tile),
+    0 calc(var(--mini-tile-step) * 3) 0 var(--tile),
+    var(--mini-tile-step) calc(var(--mini-tile-step) * 3) 0 var(--tile),
+    calc(var(--mini-tile-step) * 2) calc(var(--mini-tile-step) * 3) 0 var(--tile);
+}
+
+.main-menu__card {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: clamp(1rem, 4vw, 1.35rem);
+  justify-items: stretch;
+  padding: clamp(1.15rem, 4.5vw, 1.65rem);
   border: 2px solid var(--panel-border);
   border-radius: 8px;
   background:
@@ -165,6 +267,110 @@ button:active {
 
 .main-menu h1 {
   max-width: none;
+  margin-inline: auto;
+  font-size: clamp(4.25rem, 18vw, 7rem);
+  text-align: center;
+}
+
+.main-menu-showcase {
+  position: relative;
+  isolation: isolate;
+  width: min(13rem, 52vw);
+  aspect-ratio: 1;
+  justify-self: center;
+  padding: var(--tile-gap);
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(
+      8deg,
+      rgba(255, 236, 199, 0.055) 0 1px,
+      transparent 1px 9px
+    ),
+    repeating-linear-gradient(
+      92deg,
+      rgba(65, 38, 20, 0.045) 0 1px,
+      transparent 1px 13px
+    ),
+    var(--board-rim);
+  box-shadow:
+    0 0 0 var(--board-rim-width) var(--board-rim),
+    0 14px 26px rgba(63, 43, 27, 0.16),
+    0 4px 10px rgba(63, 43, 27, 0.1);
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.main-menu-showcase::before {
+  content: "";
+  position: absolute;
+  inset: var(--board-inset);
+  z-index: 0;
+  border-radius: 5px;
+  background:
+    repeating-linear-gradient(
+      35deg,
+      rgba(255, 236, 202, 0.045) 0 1px,
+      transparent 1px 8px
+    ),
+    repeating-linear-gradient(
+      115deg,
+      rgba(61, 39, 24, 0.04) 0 1px,
+      transparent 1px 10px
+    ),
+    var(--board-surface);
+  box-shadow: inset 2px 2px 4px rgba(45, 29, 18, 0.18);
+}
+
+.main-menu-showcase::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  padding: var(--board-inset);
+  border-radius: inherit;
+  background:
+    repeating-linear-gradient(
+      8deg,
+      rgba(255, 236, 199, 0.07) 0 1px,
+      transparent 1px 12px
+    ),
+    linear-gradient(
+      145deg,
+      rgba(255, 248, 223, 0.16),
+      transparent 42%,
+      rgba(42, 25, 14, 0.12)
+    ),
+    var(--board-rim);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+.main-menu-showcase__tile {
+  position: absolute;
+  top: var(--board-inset);
+  left: var(--board-inset);
+  width: calc((100% - (var(--board-inset) * 2) - (var(--tile-gap) * (var(--grid-size) - 1))) / var(--grid-size));
+  height: calc((100% - (var(--board-inset) * 2) - (var(--tile-gap) * (var(--grid-size) - 1))) / var(--grid-size));
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.22), transparent 42%),
+    var(--tile-noise),
+    var(--tile);
+  background-blend-mode: normal, multiply, normal;
+  box-shadow:
+    0 5px 10px color-mix(in srgb, var(--tile-shadow) 38%, transparent),
+    0 2px 4px color-mix(in srgb, var(--tile-shadow) 24%, transparent);
+  color: var(--tile-ink);
+  font-family: "Rubik", Avenir Next, Avenir, ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(0.8rem, 5vw, 1.75rem);
+  font-weight: 700;
+  line-height: 1;
+  z-index: 1;
 }
 
 .main-menu__actions {
@@ -180,7 +386,7 @@ button:active {
   color: var(--ink);
   cursor: pointer;
   font-weight: 900;
-  text-align: left;
+  text-align: center;
   padding: 0 1rem;
 }
 
@@ -1225,6 +1431,26 @@ h1 {
   }
 }
 
+@keyframes menu-pattern-left {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(calc((var(--mini-board-size) + var(--mini-board-gap)) * -4));
+  }
+}
+
+@keyframes menu-pattern-right {
+  from {
+    transform: translateX(calc((var(--mini-board-size) + var(--mini-board-gap)) * -4));
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
 @keyframes surface-item-enter {
   from {
     opacity: 0;
@@ -1234,6 +1460,12 @@ h1 {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main-menu__pattern-row {
+    animation: none;
   }
 }
 

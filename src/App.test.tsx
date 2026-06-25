@@ -211,7 +211,12 @@ describe('App drag interaction', () => {
     renderWithBoard(ROW_SLIDE_BOARD, 4, false);
 
     expect(screen.getByRole('heading', { name: 'Magic Box' })).toBeTruthy();
+    expect(document.querySelector('.main-menu-showcase')).toBeTruthy();
+    expect(document.querySelectorAll('.main-menu-showcase__tile')).toHaveLength(15);
     expect(screen.getByRole('button', { name: 'Adventure Mode' })).toBeTruthy();
+    expect(document.querySelector('.app-shell')?.getAttribute('data-screen')).toBe('menu');
+    expect(document.querySelector('.main-menu__background')).toBeTruthy();
+    expect(document.querySelectorAll('.main-menu__mini-board')).toHaveLength(180);
     expect(screen.queryByRole('button', { name: /^Tile/ })).toBeNull();
   });
 
@@ -225,6 +230,8 @@ describe('App drag interaction', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Medium 4x4' }));
 
     expect(screen.getAllByRole('button', { name: /^Tile/ })).toHaveLength(15);
+    expect(document.querySelector('.app-shell')?.getAttribute('data-screen')).toBe('game');
+    expect(document.querySelector('.main-menu__background')).toBeNull();
   });
 
   it('shows a solved classic intro before revealing the scrambled board', () => {

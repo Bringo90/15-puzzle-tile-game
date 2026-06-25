@@ -165,6 +165,55 @@ function getBoardAfterDrag(drag: DragState, draggedTileAdvanced: boolean): Board
   return next;
 }
 
+function renderMainMenuBackground() {
+  return (
+    <div className="main-menu__background" aria-hidden="true">
+      {Array.from({ length: 10 }, (_, rowIndex) => (
+        <div
+          className="main-menu__pattern-row"
+          data-direction={rowIndex % 2 === 0 ? 'left' : 'right'}
+          key={rowIndex}
+        >
+          {Array.from({ length: 18 }, (_, boardIndex) => (
+            <span className="main-menu__mini-board" key={boardIndex} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function renderMainMenuShowcaseBoard() {
+  return (
+    <div
+      className="main-menu-showcase"
+      aria-hidden="true"
+      style={{ '--grid-size': DEFAULT_GRID_SIZE } as CSSProperties}
+    >
+      {createSolvedBoard(DEFAULT_GRID_SIZE).map((tile, cellIndex) => {
+        if (tile === null) {
+          return null;
+        }
+
+        const row = Math.floor(cellIndex / DEFAULT_GRID_SIZE);
+        const col = cellIndex % DEFAULT_GRID_SIZE;
+
+        return (
+          <span
+            className="main-menu-showcase__tile"
+            key={tile}
+            style={{
+              transform: `translate3d(calc(${col} * (100% + var(--tile-gap))), calc(${row} * (100% + var(--tile-gap))), 0)`,
+            }}
+          >
+            {tile}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 export function App({ createAdventureGameForLevel = createAdventureGame, createInitialGame = createGame }: AppProps) {
   const [gridSize, setGridSize] = useState<GridSize>(getStoredGridSize);
   const [{ board, initialBoard }, setPuzzle] = useState(() => createInitialGame(gridSize));
@@ -785,19 +834,22 @@ export function App({ createAdventureGameForLevel = createAdventureGame, createI
   }
 
   return (
-    <main className="app-shell" data-theme={selectedThemeId}>
+    <main className="app-shell" data-screen={appScreen} data-theme={selectedThemeId}>
+      {appScreen === 'menu' && renderMainMenuBackground()}
       {appScreen === 'menu' ? (
         <section className="main-menu" aria-label="Main menu">
-          <p className="eyebrow">Sliding picture puzzle</p>
-          <h1>Magic Box</h1>
-          <div className="main-menu__actions">
-            <button type="button" onClick={() => openSurface('difficulty', setIsDifficultyOpen)}>New Game</button>
-            {canContinueGame && (
-              <button type="button" onClick={() => setAppScreen('game')}>Continue Game</button>
-            )}
-            <button type="button" onClick={() => openSurface('adventure', setIsAdventureOpen)}>Adventure Mode</button>
-            <button type="button" onClick={() => openSurface('theme', setIsThemeOpen)}>Themes</button>
-            <button type="button" onClick={() => openSurface('leaderboard', setIsLeaderboardOpen)}>Leaderboard</button>
+          <div className="main-menu__card">
+            <h1>Magic Box</h1>
+            {renderMainMenuShowcaseBoard()}
+            <div className="main-menu__actions">
+              <button type="button" onClick={() => openSurface('difficulty', setIsDifficultyOpen)}>New Game</button>
+              {canContinueGame && (
+                <button type="button" onClick={() => setAppScreen('game')}>Continue Game</button>
+              )}
+              <button type="button" onClick={() => openSurface('adventure', setIsAdventureOpen)}>Adventure Mode</button>
+              <button type="button" onClick={() => openSurface('theme', setIsThemeOpen)}>Themes</button>
+              <button type="button" onClick={() => openSurface('leaderboard', setIsLeaderboardOpen)}>Leaderboard</button>
+            </div>
           </div>
         </section>
       ) : (
