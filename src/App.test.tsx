@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { App } from './App';
 import { ADVENTURE_LEVELS } from './adventure';
-import { Board, GridSize } from './puzzle';
+import { Board, GridSize, createSolvedBoard } from './puzzle';
 
 const ROW_SLIDE_BOARD: Board = [
   1, 2, 3, 4,
@@ -17,6 +17,22 @@ const ONE_MOVE_FROM_SOLVED_BOARD: Board = [
   9, 10, 11, 12,
   13, 14, null, 15,
 ];
+
+function createOneMoveFromSolvedBoard(gridSize: GridSize): Board {
+  const board = createSolvedBoard(gridSize);
+  const lastTileIndex = board.length - 1;
+  board[lastTileIndex] = board[lastTileIndex - 1];
+  board[lastTileIndex - 1] = null;
+  return board;
+}
+
+function createTwoMoveLoopBoard(): Board {
+  return [
+    1, 2, 3,
+    4, 5, 6,
+    null, 7, 8,
+  ];
+}
 
 const DIFFICULTY_LABELS: Record<GridSize, string> = {
   3: 'Easy 3x3',
@@ -109,13 +125,57 @@ function startDragTilePath(label: string, clientXs: number[]) {
 function startFirstAdventureLevel(finishBoardIntro = true) {
   vi.useFakeTimers();
   fireEvent.click(screen.getByRole('button', { name: 'Adventure Mode' }));
-  fireEvent.click(screen.getByRole('button', { name: /Sunset Harbor/ }));
+  fireEvent.click(screen.getByRole('button', { name: /The Great Wave/ }));
 
   if (finishBoardIntro) {
     act(() => {
       vi.advanceTimersByTime(700);
     });
   }
+}
+
+function advanceAdventureResultToCard(result: 'complete' | 'failed' = 'complete') {
+  act(() => {
+    vi.advanceTimersByTime(500);
+  });
+  expect(document.querySelector('.adventure-result-overlay')?.getAttribute('data-phase')).toBe('overlay');
+
+  if (result === 'failed') {
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(document.querySelector('.adventure-result-overlay')?.getAttribute('data-phase')).toBe('card');
+    return;
+  }
+
+  act(() => {
+    vi.advanceTimersByTime(800);
+  });
+
+  expect(document.querySelector('.adventure-result-overlay')?.getAttribute('data-phase')).toBe('rim');
+
+  act(() => {
+    vi.advanceTimersByTime(220);
+  });
+  expect(document.querySelector('.adventure-result-overlay')?.getAttribute('data-phase')).toBe('image');
+  expect(document.querySelector('.adventure-solved-image')?.getAttribute('data-visible')).toBe('true');
+}
+
+function advanceClassicResultToCard() {
+  act(() => {
+    vi.advanceTimersByTime(500);
+  });
+  expect(document.querySelector('.adventure-result-overlay')?.getAttribute('data-phase')).toBe('overlay');
+
+  act(() => {
+    vi.advanceTimersByTime(800);
+  });
+  expect(document.querySelector('.adventure-result-overlay')?.getAttribute('data-phase')).toBe('rim');
+
+  act(() => {
+    vi.advanceTimersByTime(220);
+  });
+  expect(document.querySelector('.adventure-result-overlay')?.getAttribute('data-phase')).toBe('card');
 }
 
 describe('App drag interaction', () => {
@@ -271,7 +331,14 @@ describe('App drag interaction', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Tile 15, movable' }));
 
-    expect(screen.getByRole('dialog', { name: 'Puzzle completed' })).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Puzzle completed' })).toBeNull();
+    advanceClassicResultToCard();
+
+    const dialog = screen.getByRole('dialog', { name: 'Puzzle completed' });
+    expect(dialog).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'New game' })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Back to menu' })).toBeTruthy();
   });
 
   it('shows moves and resets them on a new game', () => {
@@ -378,8 +445,8 @@ describe('App drag interaction', () => {
     renderWithBoard(ONE_MOVE_FROM_SOLVED_BOARD);
 
     fireEvent.click(screen.getByRole('button', { name: 'Tile 15, movable' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Close completion panel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Main Menu' }));
+    advanceClassicResultToCard();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to menu' }));
     fireEvent.click(screen.getByRole('button', { name: 'Themes' }));
 
     expect(screen.getByRole('radio', { name: 'Forest Trail' })).toBeTruthy();
@@ -392,13 +459,13 @@ describe('App drag interaction', () => {
 
     expect(screen.getByRole('dialog', { name: 'Adventure levels' })).toBeTruthy();
     expect(screen.getByText('Hold a tile during a level to reveal the full image.')).toBeTruthy();
-    expect(screen.queryByText('Forest Cabin')).toBeNull();
+    expect(screen.queryByText('The Kiss')).toBeNull();
     expect((screen.getByRole('button', { name: /Locked level 2/ }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText('Complete Level 1 to unlock')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: /Sunset Harbor/ }));
+    fireEvent.click(screen.getByRole('button', { name: /The Great Wave/ }));
 
-    expect(screen.getAllByText('Sunset Harbor').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('The Great Wave').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('Moves').textContent).toContain(String(ADVENTURE_LEVELS[0].maxMoves));
     expect(screen.queryByText('1')).toBeNull();
     expect(document.querySelector('.board')?.classList.contains('board--drive-in')).toBe(true);
@@ -447,5 +514,98 @@ describe('App drag interaction', () => {
 
     expect(document.querySelector('.adventure-hint')?.getAttribute('data-visible')).toBe('false');
     expect(screen.getByLabelText('Moves').textContent).toContain(String(ADVENTURE_LEVELS[0].maxMoves));
+  });
+
+  it('plays the adventure win sequence before showing next level actions', () => {
+    vi.useFakeTimers();
+    render(
+      <App
+        createAdventureGameForLevel={(level) => {
+          const board = createOneMoveFromSolvedBoard(level.gridSize);
+          return { board, gridSize: level.gridSize, initialBoard: [...board] };
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Adventure Mode' }));
+    fireEvent.click(screen.getByRole('button', { name: /The Great Wave/ }));
+    act(() => {
+      vi.advanceTimersByTime(700);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Tile 8, movable' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Level completed' })).toBeNull();
+    expect(document.querySelector('.adventure-result-overlay')?.getAttribute('data-phase')).toBe('idle');
+
+    advanceAdventureResultToCard();
+
+    expect(screen.getByRole('dialog', { name: 'Level completed' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Back to menu' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Next level' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next level' }));
+
+    expect(screen.getAllByText('The Kiss').length).toBeGreaterThan(0);
+  });
+
+  it('only offers back to menu after the final adventure level', () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem('15-puzzle-adventure-progress', JSON.stringify({
+      completedLevelIds: ADVENTURE_LEVELS.slice(0, 9).map((level) => level.id),
+      bestByLevel: {},
+    }));
+    render(
+      <App
+        createAdventureGameForLevel={(level) => {
+          const board = createOneMoveFromSolvedBoard(level.gridSize);
+          return { board, gridSize: level.gridSize, initialBoard: [...board] };
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Adventure Mode' }));
+    fireEvent.click(screen.getByRole('button', { name: /American Gothic/ }));
+    act(() => {
+      vi.advanceTimersByTime(700);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Tile 24, movable' }));
+
+    advanceAdventureResultToCard();
+
+    expect(screen.getByRole('dialog', { name: 'Level completed' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Back to menu' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Next level' })).toBeNull();
+  });
+
+  it('shows the adventure failed card without revealing the image', () => {
+    vi.useFakeTimers();
+    render(
+      <App
+        createAdventureGameForLevel={(level) => {
+          const board = createTwoMoveLoopBoard();
+          return { board, gridSize: level.gridSize, initialBoard: [...board] };
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Adventure Mode' }));
+    fireEvent.click(screen.getByRole('button', { name: /The Great Wave/ }));
+    act(() => {
+      vi.advanceTimersByTime(700);
+    });
+
+    for (let move = 0; move < ADVENTURE_LEVELS[0].maxMoves; move += 1) {
+      fireEvent.click(screen.getByRole('button', { name: 'Tile 7, movable' }));
+    }
+
+    advanceAdventureResultToCard('failed');
+
+    const dialog = screen.getByRole('dialog', { name: 'Level failed' });
+
+    expect(dialog).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Back to menu' })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Retry level' })).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Next level' })).toBeNull();
+    expect(document.querySelector('.adventure-solved-image')?.getAttribute('data-visible')).toBe('false');
   });
 });

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Leaderboard } from './Leaderboard';
 
 function mockScoresResponse(scores: unknown[]) {
@@ -49,6 +49,36 @@ describe('Leaderboard completion flow', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Scores under 10 seconds are not submitted.')).toBeTruthy();
+    });
+  });
+
+  it('switches between difficulty leaderboards with tabs', async () => {
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({ scores: [] }),
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      },
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<Leaderboard gridSize={3} showDifficultyTabs />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenLastCalledWith('/api/scores?grid_size=3');
+    });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Medium' }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenLastCalledWith('/api/scores?grid_size=4');
+    });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Hard' }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenLastCalledWith('/api/scores?grid_size=5');
     });
   });
 });

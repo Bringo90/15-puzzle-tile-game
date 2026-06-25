@@ -9,12 +9,30 @@ import {
 
 describe('adventure levels', () => {
   it('defines valid curated levels', () => {
+    expect(ADVENTURE_LEVELS).toHaveLength(10);
+    expect(ADVENTURE_LEVELS.filter((level) => level.gridSize === 3)).toHaveLength(4);
+    expect(ADVENTURE_LEVELS.filter((level) => level.gridSize === 4)).toHaveLength(4);
+    expect(ADVENTURE_LEVELS.filter((level) => level.gridSize === 5)).toHaveLength(2);
+    expect(ADVENTURE_LEVELS[0]).toMatchObject({
+      title: 'The Great Wave',
+      imageSrc: '/adventure/The_Great_Wave_off_Kanagawa.jpg',
+      gridSize: 3,
+      maxMoves: 120,
+    });
+    expect(ADVENTURE_LEVELS[9]).toMatchObject({
+      title: 'American Gothic',
+      imageSrc: '/adventure/American_Gothic.jpg',
+      gridSize: 5,
+      maxMoves: 280,
+    });
+
     ADVENTURE_LEVELS.forEach((level) => {
       expect(level.id).toBeTruthy();
       expect(level.title).toBeTruthy();
-      expect(level.imageSrc).toMatch(/^\/adventure\/.+\.svg$/);
+      expect(level.imageSrc).toMatch(/^\/adventure\/.+\.jpg$/);
       expect([3, 4, 5]).toContain(level.gridSize);
       expect(level.maxMoves).toBeGreaterThan(0);
+      expect(level.shuffleMoves).toBeUndefined();
     });
   });
 

@@ -39,6 +39,13 @@ import {
 
 const CLICK_SLOP = 6;
 const BOARD_INTRO_MS = 700;
+const CLASSIC_RESULT_DELAY_MS = 500;
+const CLASSIC_RESULT_OVERLAY_MS = 800;
+const CLASSIC_RESULT_RIM_MS = 220;
+const ADVENTURE_RESULT_DELAY_MS = 500;
+const ADVENTURE_RESULT_WIN_OVERLAY_MS = 800;
+const ADVENTURE_RESULT_FAIL_OVERLAY_MS = 500;
+const ADVENTURE_RESULT_RIM_MS = 220;
 const HINT_HOLD_MS = 500;
 const SURFACE_EXIT_MS = 220;
 
@@ -80,10 +87,13 @@ type GameState = {
 type GameMode = 'classic' | 'adventure';
 type AppScreen = 'menu' | 'game';
 type AdventureStatus = 'idle' | 'playing' | 'failed' | 'complete';
+type AdventureResultPhase = 'idle' | 'overlay' | 'rim' | 'image' | 'card';
+type ClassicResultPhase = 'idle' | 'overlay' | 'rim' | 'card';
 type BoardIntroMode = 'classic' | 'adventure' | null;
 type SurfaceName = 'adventure' | 'completion' | 'difficulty' | 'leaderboard' | 'theme';
 
 type AppProps = {
+  createAdventureGameForLevel?: typeof createAdventureGame;
   createInitialGame?: (gridSize?: GridSize) => GameState;
 };
 
@@ -155,7 +165,7 @@ function getBoardAfterDrag(drag: DragState, draggedTileAdvanced: boolean): Board
   return next;
 }
 
-export function App({ createInitialGame = createGame }: AppProps) {
+export function App({ createAdventureGameForLevel = createAdventureGame, createInitialGame = createGame }: AppProps) {
   const [gridSize, setGridSize] = useState<GridSize>(getStoredGridSize);
   const [{ board, initialBoard }, setPuzzle] = useState(() => createInitialGame(gridSize));
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -172,6 +182,8 @@ export function App({ createInitialGame = createGame }: AppProps) {
   const [isHintVisible, setIsHintVisible] = useState(false);
   const [boardIntroMode, setBoardIntroMode] = useState<BoardIntroMode>(null);
   const [hasSettledBoardIntro, setHasSettledBoardIntro] = useState(false);
+  const [adventureResultPhase, setAdventureResultPhase] = useState<AdventureResultPhase>('idle');
+  const [classicResultPhase, setClassicResultPhase] = useState<ClassicResultPhase>('idle');
   const [closingSurfaces, setClosingSurfaces] = useState<Partial<Record<SurfaceName, boolean>>>({});
   const [appScreen, setAppScreen] = useState<AppScreen>('menu');
   const [gameMode, setGameMode] = useState<GameMode>('classic');
@@ -182,6 +194,8 @@ export function App({ createInitialGame = createGame }: AppProps) {
   const [selectedThemeId, setSelectedThemeId] = useState<ThemeId>(() => getStoredThemeId(themeProgress));
   const [themeMessage, setThemeMessage] = useState('');
   const boardRef = useRef<HTMLDivElement>(null);
+  const adventureResultTimers = useRef<number[]>([]);
+  const classicResultTimers = useRef<number[]>([]);
   const boardIntroTimer = useRef<number | null>(null);
   const closingSurfaceTimers = useRef<Partial<Record<SurfaceName, number>>>({});
   const dragState = useRef<DragState | null>(null);
@@ -242,6 +256,9 @@ export function App({ createInitialGame = createGame }: AppProps) {
   });
 
   useEffect(() => () => {
+    clearAdventureResultTimers();
+    clearClassicResultTimers();
+
     if (boardIntroTimer.current !== null) {
       window.clearTimeout(boardIntroTimer.current);
     }
@@ -262,6 +279,75 @@ export function App({ createInitialGame = createGame }: AppProps) {
   const isAdventure = gameMode === 'adventure' && adventureLevel !== null;
   const movesRemaining = adventureLevel ? Math.max(0, adventureLevel.maxMoves - moves) : 0;
   const canContinueGame = moves > 0 || hasStarted || isComplete || isAdventure;
+  const nextAdventureLevel = adventureLevel ? getNextAdventureLevel(adventureLevel) : null;
+  const isAdventureResultActive = isAdventure && isCompletionSheetOpen;
+  const isAdventureResultVisible = isAdventureResultActive && adventureResultPhase !== 'idle';
+  const isClassicResultActive = !isAdventure && isCompletionSheetOpen && completedScore !== null;
+  const isClassicResultVisible = isClassicResultActive && classicResultPhase !== 'idle';
+  const isAnyResultActive = isAdventureResultActive || isClassicResultActive;
+  const isAnyResultVisible = isAdventureResultVisible || isClassicResultVisible;
+  const showAdventureSolvedImage = isAdventureResultActive
+    && adventureStatus === 'complete'
+    && (adventureResultPhase === 'image' || adventureResultPhase === 'card');
+  const showAdventureResultCard = isAdventureResultActive
+    && (adventureResultPhase === 'card' || (adventureStatus === 'complete' && adventureResultPhase === 'image'));
+  const showClassicResultCard = isClassicResultActive && classicResultPhase === 'card';
+
+  function clearAdventureResultTimers() {
+    adventureResultTimers.current.forEach((timerId) => window.clearTimeout(timerId));
+    adventureResultTimers.current = [];
+  }
+
+  function scheduleAdventureResultPhase(phase: AdventureResultPhase, delay: number) {
+    const timerId = window.setTimeout(() => {
+      setAdventureResultPhase(phase);
+    }, delay);
+
+    adventureResultTimers.current.push(timerId);
+  }
+
+  function clearClassicResultTimers() {
+    classicResultTimers.current.forEach((timerId) => window.clearTimeout(timerId));
+    classicResultTimers.current = [];
+  }
+
+  function scheduleClassicResultPhase(phase: ClassicResultPhase, delay: number) {
+    const timerId = window.setTimeout(() => {
+      setClassicResultPhase(phase);
+    }, delay);
+
+    classicResultTimers.current.push(timerId);
+  }
+
+  function startClassicResultSequence() {
+    clearClassicResultTimers();
+    setClassicResultPhase('idle');
+    setIsCompletionSheetOpen(true);
+    scheduleClassicResultPhase('overlay', CLASSIC_RESULT_DELAY_MS);
+    scheduleClassicResultPhase('rim', CLASSIC_RESULT_DELAY_MS + CLASSIC_RESULT_OVERLAY_MS);
+    scheduleClassicResultPhase('card', CLASSIC_RESULT_DELAY_MS + CLASSIC_RESULT_OVERLAY_MS + CLASSIC_RESULT_RIM_MS);
+  }
+
+  function startAdventureResultSequence(result: 'complete' | 'failed') {
+    clearAdventureResultTimers();
+    setAdventureResultPhase('idle');
+    setIsCompletionSheetOpen(true);
+
+    scheduleAdventureResultPhase('overlay', ADVENTURE_RESULT_DELAY_MS);
+
+    if (result === 'failed') {
+      scheduleAdventureResultPhase('card', ADVENTURE_RESULT_DELAY_MS + ADVENTURE_RESULT_FAIL_OVERLAY_MS);
+      return;
+    }
+
+    scheduleAdventureResultPhase('rim', ADVENTURE_RESULT_DELAY_MS + ADVENTURE_RESULT_WIN_OVERLAY_MS);
+    scheduleAdventureResultPhase('image', ADVENTURE_RESULT_DELAY_MS + ADVENTURE_RESULT_WIN_OVERLAY_MS + ADVENTURE_RESULT_RIM_MS);
+  }
+
+  function getNextAdventureLevel(level: AdventureLevel) {
+    const currentIndex = ADVENTURE_LEVELS.findIndex((candidate) => candidate.id === level.id);
+    return currentIndex >= 0 ? ADVENTURE_LEVELS[currentIndex + 1] ?? null : null;
+  }
 
   function startBoardIntro(mode: Exclude<BoardIntroMode, null>) {
     setHasSettledBoardIntro(false);
@@ -311,6 +397,10 @@ export function App({ createInitialGame = createGame }: AppProps) {
   }
 
   function resetRunState() {
+    clearAdventureResultTimers();
+    clearClassicResultTimers();
+    setAdventureResultPhase('idle');
+    setClassicResultPhase('idle');
     setElapsedSeconds(0);
     setMoves(0);
     setHasStarted(false);
@@ -352,7 +442,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
         setAdventureStatus('complete');
         setIsComplete(true);
         setHasStarted(false);
-        setIsCompletionSheetOpen(true);
+        startAdventureResultSequence('complete');
         return;
       }
 
@@ -367,14 +457,14 @@ export function App({ createInitialGame = createGame }: AppProps) {
         moves: nextMoves,
         gridSize,
       });
-      setIsCompletionSheetOpen(true);
+      startClassicResultSequence();
       return;
     }
 
     if (gameMode === 'adventure' && adventureLevel && nextMoves >= adventureLevel.maxMoves) {
       setAdventureStatus('failed');
       setHasStarted(false);
-      setIsCompletionSheetOpen(true);
+      startAdventureResultSequence('failed');
     }
   }
 
@@ -425,7 +515,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
   }
 
   function startAdventureLevel(level: AdventureLevel) {
-    const nextGame = createAdventureGame(level);
+    const nextGame = createAdventureGameForLevel(level);
 
     setGridSize(level.gridSize);
     setPuzzle(nextGame);
@@ -454,6 +544,31 @@ export function App({ createInitialGame = createGame }: AppProps) {
     setAdventureStatus('playing');
   }
 
+  function completeAdventureLevelForTesting() {
+    if (!adventureLevel || adventureStatus !== 'playing') {
+      return;
+    }
+
+    const nextBoard = createSolvedBoard(adventureLevel.gridSize);
+    const timerStart = timerStartedAt.current ?? Date.now();
+    const nextElapsedSeconds = Math.floor((Date.now() - timerStart) / 1000);
+    const nextAdventureProgress = updateAdventureProgressForWin(
+      adventureProgress,
+      adventureLevel.id,
+      nextElapsedSeconds,
+      moves,
+    );
+
+    saveAdventureProgress(nextAdventureProgress);
+    setAdventureProgress(nextAdventureProgress);
+    setPuzzle((current) => ({ ...current, board: nextBoard }));
+    setElapsedSeconds(nextElapsedSeconds);
+    setAdventureStatus('complete');
+    setIsComplete(true);
+    setHasStarted(false);
+    startAdventureResultSequence('complete');
+  }
+
   function returnToClassic() {
     setPuzzle(createInitialGame(gridSize));
     resetRunState();
@@ -464,12 +579,22 @@ export function App({ createInitialGame = createGame }: AppProps) {
   }
 
   function returnToMenu() {
+    clearAdventureResultTimers();
+    setAdventureResultPhase('idle');
     clearHintHold();
     setIsHintVisible(false);
     setDragVisual(null);
     dragState.current = null;
     setIsCompletionSheetOpen(false);
     setAppScreen('menu');
+  }
+
+  function startNextAdventureLevel() {
+    if (!nextAdventureLevel) {
+      return;
+    }
+
+    startAdventureLevel(nextAdventureLevel);
   }
 
   function handleThemeSelect(themeId: ThemeId) {
@@ -676,7 +801,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
           </div>
         </section>
       ) : (
-      <section className="game" aria-label="Magic Box game">
+      <section className={`game${isAnyResultVisible ? ' game--result' : ''}`} aria-label="Magic Box game">
         <header className="game__header">
           <div>
             <p className="eyebrow">{isAdventure ? 'Adventure Puzzle' : 'Classic 15 Puzzle'}</p>
@@ -704,7 +829,12 @@ export function App({ createInitialGame = createGame }: AppProps) {
 
         <div
           ref={boardRef}
-          className={`board${boardIntroMode ? ' board--drive-in' : hasSettledBoardIntro ? ' board--intro-settled' : ''}`}
+          className={[
+            'board',
+            boardIntroMode ? 'board--drive-in' : hasSettledBoardIntro ? 'board--intro-settled' : '',
+            isAnyResultVisible ? 'board--result-elevated' : '',
+            adventureResultPhase === 'rim' || classicResultPhase === 'rim' ? 'board--rim-light' : '',
+          ].filter(Boolean).join(' ')}
           style={{ '--grid-size': gridSize } as CSSProperties}
         >
           {solvedBoard.filter((tile): tile is number => tile !== null).map((tile) => {
@@ -747,6 +877,15 @@ export function App({ createInitialGame = createGame }: AppProps) {
               </button>
             );
           })}
+          {isAdventure && adventureLevel && (
+            <div
+              className="adventure-solved-image"
+              data-visible={showAdventureSolvedImage}
+              aria-hidden={!showAdventureSolvedImage}
+            >
+              <img src={adventureLevel.imageSrc} alt="" />
+            </div>
+          )}
         </div>
 
         <p className={`status${isAdventure && !hasStarted && !isComplete && adventureStatus === 'playing' ? ' status--adventure-hint' : ''}`} aria-live="polite">
@@ -766,7 +905,29 @@ export function App({ createInitialGame = createGame }: AppProps) {
           <button type="button" onClick={() => openSurface('difficulty', setIsDifficultyOpen)}>Difficulty</button>
           <button type="button" onClick={newGame}>{isAdventure ? 'Retry level' : 'New game'}</button>
         </div>
+        {isAdventure && adventureStatus === 'playing' && (
+          <button className="test-win-button" type="button" onClick={completeAdventureLevelForTesting}>
+            Test win
+          </button>
+        )}
+        {isAnyResultActive && (
+          <div
+            className="adventure-result-overlay"
+            data-phase={isAdventureResultActive ? adventureResultPhase : classicResultPhase}
+            data-result={isAdventureResultActive ? adventureStatus : 'complete'}
+            aria-hidden="true"
+          />
+        )}
       </section>
+      )}
+
+      {isAnyResultActive && (
+        <div
+          className="adventure-result-page-overlay"
+          data-phase={isAdventureResultActive ? adventureResultPhase : classicResultPhase}
+          data-result={isAdventureResultActive ? adventureStatus : 'complete'}
+          aria-hidden="true"
+        />
       )}
 
       {isAdventure && (
@@ -777,6 +938,39 @@ export function App({ createInitialGame = createGame }: AppProps) {
         >
           <img src={adventureLevel.imageSrc} alt="" />
         </div>
+      )}
+
+      {isAdventureResultActive && adventureLevel && (
+        <>
+          {showAdventureResultCard && (
+            <div className="adventure-result-card-wrap" role="presentation">
+              <section
+                className="completion-sheet adventure-completion adventure-result-card"
+                data-result={adventureStatus}
+                role="dialog"
+                aria-modal="true"
+                aria-label={adventureStatus === 'failed' ? 'Level failed' : 'Level completed'}
+              >
+                <h2>{adventureStatus === 'failed' ? 'Out of moves' : 'Level complete'}</h2>
+                <p className="leaderboard__difficulty">
+                  {adventureLevel.title} · {adventureLevel.gridSize}x{adventureLevel.gridSize}
+                </p>
+                <div className="completion-summary">
+                  <span>Time {formatTime(elapsedSeconds)}</span>
+                  <span>{moves} moves</span>
+                </div>
+                <div className="adventure-result-actions">
+                  <button type="button" onClick={returnToMenu}>Back to menu</button>
+                  {adventureStatus === 'failed' ? (
+                    <button type="button" onClick={restartAdventureLevel}>Retry level</button>
+                  ) : nextAdventureLevel ? (
+                    <button type="button" onClick={startNextAdventureLevel}>Next level</button>
+                  ) : null}
+                </div>
+              </section>
+            </div>
+          )}
+        </>
       )}
 
       {isSurfaceRendered('difficulty', isDifficultyOpen) && (
@@ -905,7 +1099,7 @@ export function App({ createInitialGame = createGame }: AppProps) {
             >
               Close
             </button>
-            <Leaderboard gridSize={gridSize} />
+            <Leaderboard gridSize={gridSize} showDifficultyTabs />
           </section>
         </div>
       )}
@@ -983,71 +1177,29 @@ export function App({ createInitialGame = createGame }: AppProps) {
         </div>
       )}
 
-      {isSurfaceRendered('completion', isCompletionSheetOpen) && completedScore && (
-        <div className="completion-backdrop" data-state={getSurfaceState('completion')} role="presentation">
+      {isClassicResultActive && showClassicResultCard && completedScore && (
+        <div className="adventure-result-card-wrap" role="presentation">
           <section
-            className="completion-sheet"
+            className="completion-sheet classic-result-card"
             role="dialog"
             aria-modal="true"
             aria-label="Puzzle completed"
           >
-            <button
-              className="modal-close"
-              type="button"
-              onClick={() => closeSurface('completion', setIsCompletionSheetOpen)}
-              aria-label="Close completion panel"
-            >
-              Close
-            </button>
             <Leaderboard
               completedScore={completedScore}
               gridSize={gridSize}
+              showRefresh={false}
               showSubmit
               title="Solved"
             />
+            <div className="classic-result-actions">
+              <button type="button" onClick={newGame}>New game</button>
+              <button type="button" onClick={returnToMenu}>Back to menu</button>
+            </div>
           </section>
         </div>
       )}
 
-      {isSurfaceRendered('completion', isCompletionSheetOpen) && isAdventure && (
-        <div className="completion-backdrop" data-state={getSurfaceState('completion')} role="presentation">
-          <section
-            className="completion-sheet adventure-completion"
-            role="dialog"
-            aria-modal="true"
-            aria-label={adventureStatus === 'failed' ? 'Level failed' : 'Level completed'}
-          >
-            <button
-              className="modal-close"
-              type="button"
-              onClick={() => closeSurface('completion', setIsCompletionSheetOpen)}
-              aria-label="Close adventure result"
-            >
-              Close
-            </button>
-            <h2>{adventureStatus === 'failed' ? 'Out of moves' : 'Level complete'}</h2>
-            <p className="leaderboard__difficulty">
-              {adventureLevel.title} · {adventureLevel.gridSize}x{adventureLevel.gridSize}
-            </p>
-            <div className="completion-summary">
-              <span>Time {formatTime(elapsedSeconds)}</span>
-              <span>{moves} moves</span>
-            </div>
-            <div className="adventure-result-actions">
-              <button type="button" onClick={restartAdventureLevel}>Retry level</button>
-              <button
-                type="button"
-                onClick={() => {
-                  closeSurface('completion', setIsCompletionSheetOpen);
-                  openSurface('adventure', setIsAdventureOpen);
-                }}
-              >
-                Levels
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
     </main>
   );
 }

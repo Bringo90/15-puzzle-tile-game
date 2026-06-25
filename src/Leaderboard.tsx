@@ -17,6 +17,8 @@ type LeaderboardProps = {
     moves: number;
   } | null;
   gridSize: GridSize;
+  showDifficultyTabs?: boolean;
+  showRefresh?: boolean;
   showSubmit?: boolean;
   title?: string;
 };
@@ -58,9 +60,12 @@ function isTopTenScore(scores: Score[], completedScore: NonNullable<LeaderboardP
 export function Leaderboard({
   completedScore = null,
   gridSize,
+  showDifficultyTabs = false,
+  showRefresh = true,
   showSubmit = false,
   title = 'Leaderboard',
 }: LeaderboardProps) {
+  const [activeGridSize, setActiveGridSize] = useState(gridSize);
   const [scores, setScores] = useState<Score[]>([]);
   const [playerName, setPlayerName] = useState('');
   const [message, setMessage] = useState('');
@@ -74,7 +79,7 @@ export function Leaderboard({
     setMessage('');
 
     try {
-      const response = await fetch(`/api/scores?grid_size=${gridSize}`);
+      const response = await fetch(`/api/scores?grid_size=${activeGridSize}`);
       const body = await readJsonResponse(response);
 
       if (!response.ok) {
@@ -91,6 +96,10 @@ export function Leaderboard({
 
   useEffect(() => {
     void loadScores();
+  }, [activeGridSize]);
+
+  useEffect(() => {
+    setActiveGridSize(gridSize);
   }, [gridSize]);
 
   async function submitScore(event: FormEvent<HTMLFormElement>) {
@@ -145,14 +154,32 @@ export function Leaderboard({
     <section className="leaderboard" aria-label="Leaderboard">
       <div className="leaderboard__header">
         <h2>{title}</h2>
-        <button type="button" onClick={loadScores} disabled={isLoading}>
-          Refresh
-        </button>
+        {showRefresh && (
+          <button type="button" onClick={loadScores} disabled={isLoading}>
+            Refresh
+          </button>
+        )}
       </div>
 
       <p className="leaderboard__difficulty">
-        {DIFFICULTIES.find((difficulty) => difficulty.gridSize === gridSize)?.label} · {gridSize}x{gridSize}
+        {DIFFICULTIES.find((difficulty) => difficulty.gridSize === activeGridSize)?.label} · {activeGridSize}x{activeGridSize}
       </p>
+
+      {showDifficultyTabs && (
+        <div className="leaderboard-tabs" role="tablist" aria-label="Leaderboard difficulty">
+          {DIFFICULTIES.map((difficulty) => (
+            <button
+              aria-selected={activeGridSize === difficulty.gridSize}
+              key={difficulty.gridSize}
+              onClick={() => setActiveGridSize(difficulty.gridSize)}
+              role="tab"
+              type="button"
+            >
+              {difficulty.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {showSubmit && completedScore && (
         <div className="completion-summary">
